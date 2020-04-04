@@ -1,0 +1,11 @@
+resolver: lts-14.20
+
+packages:
+  - .
+
+extra-deps:
+  - sdl2-2.3.0.1
+  - astar-0.3.0.0
+  - git: https://github.com/haskell-game/sdl2-image.git
+    commit: 382395c763b473032721c71921b5c9241142178f
+allow-newer: true

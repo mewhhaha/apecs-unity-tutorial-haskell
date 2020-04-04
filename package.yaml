@@ -1,0 +1,44 @@
+library:
+  source-dirs: src
+  dependencies:
+    - sdl2
+    - sdl2-image
+    - array
+    - apecs
+    - linear
+    - containers
+    - astar
+    - random
+    - MonadRandom
+    - extra
+    - constraints
+    - mtl
+    - filepath
+    - template-haskell
+    - typelits-witnesses
+    - text
+copyright: 2020 Author name here
+maintainer: example@example.com
+dependencies:
+  - base >= 4.7 && < 5
+name: game
+version: 0.1.0.0
+extra-source-files:
+  - README.md
+  - ChangeLog.md
+author: Author name here
+github: githubuser/game
+license: null
+executables:
+  game-exe:
+    source-dirs: app
+    main: Main.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -O2
+      - -Wall
+    dependencies:
+      - game
+description: Please see the README on GitHub at <https://github.com/githubuser/mall#readme>

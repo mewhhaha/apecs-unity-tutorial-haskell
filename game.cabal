@@ -1,0 +1,69 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: ca57468ed2728f96affec7f089be2d32dc8350d867942adee34e91e38c78e6b0
+
+name:           game
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/mall#readme>
+homepage:       https://github.com/githubuser/game#readme
+bug-reports:    https://github.com/githubuser/game/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2020 Author name here
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/game
+
+library
+  exposed-modules:
+      Apecs.SDL
+      Apecs.SDL.Internal
+      Env
+      Event
+      Run
+      System.Component
+      System.World
+  other-modules:
+      Paths_game
+  hs-source-dirs:
+      src
+  build-depends:
+      MonadRandom
+    , apecs
+    , array
+    , astar
+    , base >=4.7 && <5
+    , constraints
+    , containers
+    , extra
+    , filepath
+    , linear
+    , mtl
+    , random
+    , sdl2
+    , sdl2-image
+    , template-haskell
+    , text
+    , typelits-witnesses
+  default-language: Haskell2010
+
+executable game-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_game
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -O2 -Wall
+  build-depends:
+      base >=4.7 && <5
+    , game
+  default-language: Haskell2010
