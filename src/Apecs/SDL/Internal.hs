@@ -43,8 +43,8 @@ type Point a = V2 a
 
 data Sheet a = Sheet {clip :: Maybe a, texture :: Texture, frames :: Map.Map a (SDL.Rectangle CInt)}
 
-data HSheet (n :: Nat) where
-  HSheet :: (KnownNat a, a <= n, 1 <= a, 1 <= n) => {frame :: Frame a, sheet :: Sheet Integer} -> HSheet n
+data Animation (n :: Nat) where
+  Animation :: (KnownNat a, a <= n, 1 <= a, 1 <= n) => {frame :: Frame a, sheet :: Sheet Integer} -> Animation n
 
 instance Sprite Texture where
   getFrame _ = Nothing
@@ -54,8 +54,8 @@ instance (Ord a, Eq a) => Sprite (Sheet a) where
   getFrame Sheet {clip, frames} = clip >>= (`Map.lookup` frames)
   getTexture = texture
 
-instance Sprite (HSheet a) where
-  getFrame HSheet {frame, sheet} = getFrame (sheet {clip = Just n})
+instance Sprite (Animation a) where
+  getFrame Animation {frame, sheet} = getFrame (sheet {clip = Just n})
     where
       n = natVal frame
   getTexture = texture . sheet
@@ -66,8 +66,8 @@ mkTexture = Texture
 mkSheet :: Texture -> Map.Map a (SDL.Rectangle CInt) -> Sheet a
 mkSheet = Sheet Nothing
 
-mkHSheet :: forall n. (KnownNat n, 1 <= n) => Texture -> HSheet n
-mkHSheet t@(Texture _ ti) = HSheet (Proxy @1) (mkSheet t (frames size))
+mkAnimation :: forall n. (KnownNat n, 1 <= n) => Texture -> Animation n
+mkAnimation t@(Texture _ ti) = Animation (Proxy @1) (mkSheet t (frames size))
   where
     size = natVal (Proxy :: Proxy n)
     (w, h) = (SDL.textureWidth ti `div` fromIntegral size, SDL.textureHeight ti)
@@ -75,12 +75,12 @@ mkHSheet t@(Texture _ ti) = HSheet (Proxy @1) (mkSheet t (frames size))
     frames 0 = mempty
     frames n = Map.insert n (mkRect (w * fromIntegral (n - 1)) 0 w h) (frames (n - 1))
 
-animate :: forall b n. (KnownNat b, KnownNat n, 1 <= n, b <= n, 1 <= b) => HSheet n -> HSheet n
-animate (HSheet _ sheet) = HSheet f sheet
+animate :: forall b n. (KnownNat b, KnownNat n, 1 <= n, b <= n, 1 <= b) => Animation n -> Animation n
+animate (Animation _ sheet) = Animation f sheet
   where
     f = Proxy :: Frame b
 
-linear :: forall n. (KnownNat n, 1 <= n) => Double -> Double -> HSheet n -> HSheet n
+linear :: forall n. (KnownNat n, 1 <= n) => Double -> Double -> Animation n -> Animation n
 linear time duration = case nat of
   Nothing -> animate @1
   Just (SomeNat p) -> case (isLE (Proxy @1) p, isLE p (Proxy @n)) of
@@ -91,7 +91,7 @@ linear time duration = case nat of
     size = natVal (Proxy @n)
     norm = if duration == 0 then 0 else (time `mod'` duration) / duration
     nat = someNatVal (floor (fromIntegral size * norm))
-    decide :: forall p. (KnownNat p, 1 <= p, p <= n) => Proxy p -> HSheet n -> HSheet n
+    decide :: forall p. (KnownNat p, 1 <= p, p <= n) => Proxy p -> Animation n -> Animation n
     decide _ = animate @p
 
 withSDL :: (MonadIO m) => m a -> m ()

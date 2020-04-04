@@ -9,10 +9,10 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module System.World where
+module Game.World where
 
 import Apecs
-import System.Component (CAnimation, CDrawable, CIsRunning, CPlayer, CPosition, CTime)
+import Game.Component
 
 makeWorld
   "World"
@@ -21,7 +21,8 @@ makeWorld
     ''CDrawable,
     ''CTime,
     ''CIsRunning,
-    ''CAnimation
+    ''CAnimation,
+    ''CGround
   ]
 
 type System' a = System World a

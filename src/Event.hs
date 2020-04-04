@@ -2,9 +2,9 @@ module Event where
 
 import Apecs
 import Control.Monad (when)
+import Game.Component (CIsRunning (..))
+import Game.World (System')
 import qualified SDL
-import System.Component (CIsRunning (..))
-import System.World (System')
 
 whenKeyPressed :: SDL.Scancode -> SDL.EventPayload -> System' () -> System' ()
 whenKeyPressed s e = when (isKeyPressed s e)

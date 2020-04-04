@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ca57468ed2728f96affec7f089be2d32dc8350d867942adee34e91e38c78e6b0
+-- hash: fa72843e984bbf84a83b3514f1efedaadab351187dfbce48ef691c86d3c272e7
 
 name:           game
 version:        0.1.0.0
@@ -25,13 +25,14 @@ source-repository head
 
 library
   exposed-modules:
+      Apecs.Extra
       Apecs.SDL
       Apecs.SDL.Internal
       Env
       Event
+      Game.Component
+      Game.World
       Run
-      System.Component
-      System.World
   other-modules:
       Paths_game
   hs-source-dirs:

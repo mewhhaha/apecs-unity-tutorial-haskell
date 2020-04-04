@@ -1,7 +1,7 @@
 module Main where
 
+import Game.World (initWorld)
 import Run
-import System.World (initWorld)
 
 main :: IO ()
 main = do

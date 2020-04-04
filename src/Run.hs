@@ -13,20 +13,22 @@
 module Run where
 
 import Apecs (ask, cfoldM, cmap, lift, newEntity, runWith)
+import Apecs.Extra (cM)
 import Apecs.SDL (play, renderSprite)
-import Apecs.SDL.Internal (HSheet, Sheet (..), Texture, animate, linear, loadTexture, mkHSheet, mkRect, mkSheet)
+import Apecs.SDL.Internal (Animation, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkAnimation, mkRect, mkSheet)
+import Control.Arrow
 import Control.Monad (forM_)
 import Data.Either
 import qualified Data.Map as Map
-import qualified Env as Env
-import Env (mkProp)
+import qualified Env
 import Event (isKeyDown)
 import GHC.TypeNats
+import Game.Component
+import Game.World (System', World)
 import Linear (V2 (..))
 import qualified SDL
-import System.Component
 import System.FilePath.Posix ((</>))
-import System.World (System', World)
+import System.Random
 
 data Direction = North | East | South | West
 
@@ -35,27 +37,31 @@ data Action = Move Direction | Quit
 initialize :: System' ()
 initialize = do
   newEntity (CPlayer, CPosition (V2 0 0), CAnimation 0 0.5)
-  pure ()
+  newEntity (CGround G1, CPosition (V2 3 3))
+  let grounds = randomRs (minBound, maxBound) (mkStdGen 0)
+  let positions = [V2 x y | x <- [0 .. 19], y <- [0 .. 19]]
+  let ground = newEntity <$> zipWith (curry (CGround *** CPosition)) grounds positions
+  sequence_ ground
 
 resources :: SDL.Renderer -> IO Env.Env
 resources r = do
-  prop <- mkProp <$> load "props.png"
-  ground <- loadHSheet "ground.png"
-  obstacle <- loadHSheet "obstacles.png"
-  wall <- loadHSheet "obstacles.png"
-  playerAttack <- loadHSheet "player_attack.png"
-  playerIdle <- loadHSheet "player_idle.png"
-  playerHurt <- loadHSheet "player_hurt.png"
-  vampireIdle <- loadHSheet "vampire_idle.png"
-  vampireAttack <- loadHSheet "vampire_attack.png"
-  zombieIdle <- loadHSheet "zombie_idle.png"
-  zombieAttack <- loadHSheet "zombie_attack.png"
+  prop <- load32x32 "props.png"
+  ground <- load32x32 "ground.png"
+  obstacle <- load32x32 "obstacles.png"
+  wall <- load32x32 "obstacles.png"
+  playerAttack <- loadAnimation "player_attack.png"
+  playerIdle <- loadAnimation "player_idle.png"
+  playerHurt <- loadAnimation "player_hurt.png"
+  vampireIdle <- loadAnimation "vampire_idle.png"
+  vampireAttack <- loadAnimation "vampire_attack.png"
+  zombieIdle <- loadAnimation "zombie_idle.png"
+  zombieAttack <- loadAnimation "zombie_attack.png"
   pure
     Env.Env
       { prop = prop,
-        ground = Env.Ground ground,
-        obstacle = Env.Obstacle obstacle,
-        wall = Env.Wall wall,
+        ground = ground,
+        obstacle = obstacle,
+        wall = wall,
         player =
           Env.Player
             { attack = playerAttack,
@@ -76,8 +82,10 @@ resources r = do
   where
     load :: FilePath -> IO Texture
     load f = loadTexture r ("resources" </> "sprites" </> f)
-    loadHSheet :: forall n. (KnownNat n, 1 <= n) => FilePath -> IO (HSheet n)
-    loadHSheet f = mkHSheet @n <$> load f
+    load32x32 :: forall a. (Enum a, Ord a, Bounded a) => FilePath -> IO (Sheet a)
+    load32x32 f = (`mkSheet` Env.frames @a (32, 32)) <$> load f
+    loadAnimation :: forall n. (KnownNat n, 1 <= n) => FilePath -> IO (Animation n)
+    loadAnimation f = mkAnimation @n <$> load f
 
 movement :: Either Action SDL.Event -> Either Action SDL.Event
 movement e = do
@@ -93,25 +101,25 @@ events :: Env.Env -> [SDL.Event] -> [Action]
 events _ es = lefts $ movement . Right <$> es
 
 draw :: Env.Env -> SDL.Renderer -> System' ()
-draw Env.Env {player} r = do
-  draws <- drawPlayer player
-  lift draws
+draw Env.Env {player, ground} r = do
+  draws <- sequence [drawGround ground, drawPlayer player]
+  lift . sequence_ $ draws
   where
+    toScreen :: Integral a => V2 Double -> V2 a
     toScreen p = round . (* 32) <$> p
-    render p = pure . renderSprite r (toScreen p)
-    drawGround :: Env.Ground -> System' (IO ())
-    drawGround Env.Ground {ground} = undefined
+    render :: forall a i. (Sprite a) => V2 Double -> a -> IO ()
+    render p = renderSprite r (toScreen p)
+    drawGround :: Sheet Ground -> System' (IO ())
+    drawGround s = cM $ \(CGround g, CPosition pos) ->
+      render pos (s {clip = Just g})
     drawPlayer :: Env.Player -> System' (IO ())
     drawPlayer Env.Player {idle} =
-      cfoldM
-        ( \_ (CPlayer, CPosition pos, CAnimation time dur) ->
-            render pos (linear time dur idle)
-        )
-        mempty
+      cM $ \(CPlayer, CPosition pos, CAnimation time dur) ->
+        render pos (linear time dur idle)
 
 step :: Env.Env -> Double -> [Action] -> System' World
 step _ dt es = do
-  cmap $ \(CPosition prev) -> Just (CPosition $ foldr update prev es)
+  cmap $ \(CPlayer, CPosition prev) -> Just (CPlayer, CPosition $ foldr update prev es)
   cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
   ask
   where
