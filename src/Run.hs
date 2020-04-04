@@ -38,10 +38,11 @@ initialize :: System' ()
 initialize = do
   newEntity (CPlayer, CPosition (V2 0 0), CAnimation 0 0.5)
   newEntity (CGround G1, CPosition (V2 3 3))
-  let grounds = randomRs (minBound, maxBound) (mkStdGen 0)
-  let positions = [V2 x y | x <- [0 .. 19], y <- [0 .. 19]]
-  let ground = newEntity <$> zipWith (curry (CGround *** CPosition)) grounds positions
-  sequence_ ground
+  sequence_ $
+    newEntity . (CGround *** CPosition)
+      <$> zip
+        (randoms (mkStdGen 0))
+        [V2 x y | x <- [0 .. 19], y <- [0 .. 19]]
 
 resources :: SDL.Renderer -> IO Env.Env
 resources r = do
