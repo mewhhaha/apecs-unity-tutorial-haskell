@@ -6,7 +6,7 @@ module Env where
 import Apecs.SDL.Internal (HSheet, Sheet, mkRect, mkSheet)
 import qualified Data.Map as Map
 
-data Props = Drink | Apples | Exit
+data Prop = Drink | Apples | Exit
   deriving (Eq, Ord)
 
 propsFrames = Map.fromList [(Drink, mkRect (x 0) 0 w h), (Apples, mkRect (x 1) 0 w h), (Exit, mkRect (x 2) 0 w h)]
@@ -36,15 +36,21 @@ data Player
         hurt :: HSheet 2
       }
 
+newtype Ground = Ground {ground :: HSheet 8}
+
+newtype Obstacle = Obstacle {obstacle :: HSheet 7}
+
+newtype Wall = Wall {wall :: HSheet 11}
+
 data Env
   = Env
       { zombie :: Zombie,
         vampire :: Vampire,
         player :: Player,
-        props :: Sheet Props,
-        ground :: HSheet 8,
-        obstacles :: HSheet 7,
-        wall :: HSheet 11
+        prop :: Sheet Prop,
+        ground :: Ground,
+        obstacle :: Obstacle,
+        wall :: Wall
       }
 
-mkProps p = mkSheet p propsFrames
+mkProp p = mkSheet p propsFrames

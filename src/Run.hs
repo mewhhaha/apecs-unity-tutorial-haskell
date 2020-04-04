@@ -19,7 +19,7 @@ import Control.Monad (forM_)
 import Data.Either
 import qualified Data.Map as Map
 import qualified Env as Env
-import Env (mkProps)
+import Env (mkProp)
 import Event (isKeyDown)
 import GHC.TypeNats
 import Linear (V2 (..))
@@ -39,9 +39,9 @@ initialize = do
 
 resources :: SDL.Renderer -> IO Env.Env
 resources r = do
-  props <- mkProps <$> load "props.png"
+  prop <- mkProp <$> load "props.png"
   ground <- loadHSheet "ground.png"
-  obstacles <- loadHSheet "obstacles.png"
+  obstacle <- loadHSheet "obstacles.png"
   wall <- loadHSheet "obstacles.png"
   playerAttack <- loadHSheet "player_attack.png"
   playerIdle <- loadHSheet "player_idle.png"
@@ -52,10 +52,10 @@ resources r = do
   zombieAttack <- loadHSheet "zombie_attack.png"
   pure
     Env.Env
-      { props = props,
-        ground = ground,
-        obstacles = obstacles,
-        wall = wall,
+      { prop = prop,
+        ground = Env.Ground ground,
+        obstacle = Env.Obstacle obstacle,
+        wall = Env.Wall wall,
         player =
           Env.Player
             { attack = playerAttack,
@@ -99,6 +99,8 @@ draw Env.Env {player} r = do
   where
     toScreen p = round . (* 32) <$> p
     render p = pure . renderSprite r (toScreen p)
+    drawGround :: Env.Ground -> System' (IO ())
+    drawGround Env.Ground {ground} = undefined
     drawPlayer :: Env.Player -> System' (IO ())
     drawPlayer Env.Player {idle} =
       cfoldM
