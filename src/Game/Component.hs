@@ -16,17 +16,23 @@ import Linear
 import Linear.V2
 import System.Random
 
-instance {-# OVERLAPPABLE #-} (Bounded a, Enum a) => Random a where
-  random = randomR (minBound, maxBound)
-  randomR (f, t) gen =
-    let (rndInt, nxtGen) = randomR (fromEnum f, fromEnum t) gen
-     in (toEnum rndInt, nxtGen)
+defaultEnumRandomR :: (Enum a, RandomGen g) => (a, a) -> g -> (a, g)
+defaultEnumRandomR (lo, hi) g = (toEnum i, g')
+  where
+    (i, g') = randomR (fromEnum lo, fromEnum hi) g
+
+defaultBoundedRandom :: (Random a, Bounded a, RandomGen g) => g -> (a, g)
+defaultBoundedRandom = randomR (minBound, maxBound)
 
 data Prop = Drink | Apples | Exit
   deriving (Eq, Ord, Enum, Bounded)
 
 data Ground = G1 | G2 | G3 | G4 | G5 | G6 | G7 | G8
   deriving (Eq, Ord, Enum, Bounded)
+
+instance Random Ground where
+  randomR = defaultEnumRandomR
+  random = defaultBoundedRandom
 
 data Obstacle = O1 | O2 | O3 | O4 | O5 | O6 | O7
   deriving (Eq, Ord, Enum, Bounded)
