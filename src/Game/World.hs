@@ -22,7 +22,10 @@ makeWorld
     ''CTime,
     ''CIsRunning,
     ''CAnimation,
-    ''CGround
+    ''CGround,
+    ''CWall,
+    ''CObstacle,
+    ''CProp
   ]
 
 type System' a = System World a

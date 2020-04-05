@@ -27,6 +27,10 @@ defaultBoundedRandom = randomR (minBound, maxBound)
 data Prop = Drink | Apples | Exit
   deriving (Eq, Ord, Enum, Bounded)
 
+instance Random Prop where
+  randomR = defaultEnumRandomR
+  random = defaultBoundedRandom
+
 data Ground = G1 | G2 | G3 | G4 | G5 | G6 | G7 | G8
   deriving (Eq, Ord, Enum, Bounded)
 
@@ -37,8 +41,16 @@ instance Random Ground where
 data Obstacle = O1 | O2 | O3 | O4 | O5 | O6 | O7
   deriving (Eq, Ord, Enum, Bounded)
 
+instance Random Obstacle where
+  randomR = defaultEnumRandomR
+  random = defaultBoundedRandom
+
 data Wall = W1 | W2 | W3 | W4 | W5 | W6 | W7 | W8 | W9 | W10 | W11
   deriving (Eq, Ord, Enum, Bounded)
+
+instance Random Wall where
+  randomR = defaultEnumRandomR
+  random = defaultBoundedRandom
 
 type Position = V2 Double
 
@@ -47,11 +59,18 @@ data CDrawable = Drawable
 newtype CTime = CTime Integer
 
 newtype CPosition = CPosition Position
-  deriving (Eq, Ord)
 
 data CPlayer = CPlayer
 
-newtype CGround = CGround Ground
+newtype Clip a = Clip a
+
+type CGround = Clip Ground
+
+type CWall = Clip Wall
+
+type CObstacle = Clip Obstacle
+
+type CProp = Clip Prop
 
 data CIsRunning = Running | Paused | Stopped
   deriving (Eq)
@@ -65,6 +84,12 @@ instance Component CDrawable where type Storage CDrawable = Apecs.Map CDrawable
 instance Component CAnimation where type Storage CAnimation = Apecs.Map CAnimation
 
 instance Component CGround where type Storage CGround = Apecs.Map CGround
+
+instance Component CWall where type Storage CWall = Apecs.Map CWall
+
+instance Component CObstacle where type Storage CObstacle = Apecs.Map CObstacle
+
+instance Component CProp where type Storage CProp = Apecs.Map CProp
 
 instance Component CTime where type Storage CTime = Apecs.Global CTime
 

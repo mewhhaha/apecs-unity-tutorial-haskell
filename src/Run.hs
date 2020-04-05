@@ -12,10 +12,9 @@
 
 module Run where
 
-import Apecs (ask, cfoldM, cmap, lift, newEntity, runWith)
-import Apecs.Extra (cM)
+import Apecs (Get, Members, ask, cfoldM, cmap, lift, newEntity, runWith)
 import Apecs.SDL (play, renderSprite)
-import Apecs.SDL.Internal (Animation, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkAnimation, mkRect, mkSheet)
+import Apecs.SDL.Internal (ASheet, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
 import Control.Arrow
 import Control.Monad (forM_)
 import Data.Either
@@ -36,27 +35,44 @@ data Action = Move Direction | Quit
 
 initialize :: System' ()
 initialize = do
-  newEntity (CPlayer, CPosition (V2 0 0), CAnimation 0 0.5)
-  newEntity (CGround G1, CPosition (V2 3 3))
+  let shrink = tail . init
+      hedges = [V2 x y | x <- xs, y <- [head ys, last ys]]
+      vedges = [V2 x y | x <- [head xs, last xs], y <- shrink ys]
   sequence_ $
-    newEntity . (CGround *** CPosition)
-      <$> zip
-        (randoms (mkStdGen 0))
-        [V2 x y | x <- [0 .. 19], y <- [0 .. 19]]
+    newEntity . (Clip *** CPosition)
+      <$> zip (enums @Ground 0) [V2 x y | x <- shrink xs, y <- shrink ys]
+  sequence_ $
+    newEntity . (Clip *** CPosition)
+      <$> zip (enums @Wall 1) (hedges ++ vedges)
+  let startX = pick (shrink xs) 1
+      startY = pick (shrink ys) 2
+  newEntity (CPlayer, CPosition (V2 startX startY), CAnimation 0 0.5)
+  pure ()
+  where
+    ends :: [Double] -> (Int, Int)
+    ends l = (floor $ head l, floor $ last l)
+    pick :: [Double] -> Int -> Double
+    pick rs seed = fromIntegral . fst . randomR (ends rs) $ mkStdGen seed
+    enums :: forall a. Random a => Int -> [a]
+    enums = randoms . mkStdGen
+    xs :: [Double]
+    xs = [0 .. 19]
+    ys :: [Double]
+    ys = [0 .. 14]
 
 resources :: SDL.Renderer -> IO Env.Env
 resources r = do
-  prop <- load32x32 "props.png"
-  ground <- load32x32 "ground.png"
-  obstacle <- load32x32 "obstacles.png"
-  wall <- load32x32 "obstacles.png"
-  playerAttack <- loadAnimation "player_attack.png"
-  playerIdle <- loadAnimation "player_idle.png"
-  playerHurt <- loadAnimation "player_hurt.png"
-  vampireIdle <- loadAnimation "vampire_idle.png"
-  vampireAttack <- loadAnimation "vampire_attack.png"
-  zombieIdle <- loadAnimation "zombie_idle.png"
-  zombieAttack <- loadAnimation "zombie_attack.png"
+  prop <- loadSheet32x32 "props.png"
+  ground <- loadSheet32x32 "ground.png"
+  obstacle <- loadSheet32x32 "obstacles.png"
+  wall <- loadSheet32x32 "wall.png"
+  playerAttack <- loadASheet32x32 "player_attack.png"
+  playerIdle <- loadASheet32x32 "player_idle.png"
+  playerHurt <- loadASheet32x32 "player_hurt.png"
+  vampireIdle <- loadASheet32x32 "vampire_idle.png"
+  vampireAttack <- loadASheet32x32 "vampire_attack.png"
+  zombieIdle <- loadASheet32x32 "zombie_idle.png"
+  zombieAttack <- loadASheet32x32 "zombie_attack.png"
   pure
     Env.Env
       { prop = prop,
@@ -83,10 +99,10 @@ resources r = do
   where
     load :: FilePath -> IO Texture
     load f = loadTexture r ("resources" </> "sprites" </> f)
-    load32x32 :: forall a. (Enum a, Ord a, Bounded a) => FilePath -> IO (Sheet a)
-    load32x32 f = (`mkSheet` Env.frames @a (32, 32)) <$> load f
-    loadAnimation :: forall n. (KnownNat n, 1 <= n) => FilePath -> IO (Animation n)
-    loadAnimation f = mkAnimation @n <$> load f
+    loadSheet32x32 :: forall a. (Enum a, Ord a, Bounded a) => FilePath -> IO (Sheet a)
+    loadSheet32x32 f = (`mkSheet` mkClips (32, 32)) <$> load f
+    loadASheet32x32 :: forall n. (KnownNat n, 1 <= n) => FilePath -> IO (ASheet n)
+    loadASheet32x32 f = (`mkASheet` (32, 32)) <$> load f
 
 movement :: Either Action SDL.Event -> Either Action SDL.Event
 movement e = do
@@ -102,21 +118,23 @@ events :: Env.Env -> [SDL.Event] -> [Action]
 events _ es = lefts $ movement . Right <$> es
 
 draw :: Env.Env -> SDL.Renderer -> System' ()
-draw Env.Env {player, ground} r = do
-  draws <- sequence [drawGround ground, drawPlayer player]
+draw Env.Env {player, ground, wall} r = do
+  draws <- sequence [drawSheet ground, drawSheet wall, drawPlayer player]
   lift . sequence_ $ draws
   where
     toScreen :: Integral a => V2 Double -> V2 a
     toScreen p = round . (* 32) <$> p
-    render :: forall a i. (Sprite a) => V2 Double -> a -> IO ()
-    render p = renderSprite r (toScreen p)
-    drawGround :: Sheet Ground -> System' (IO ())
-    drawGround s = cM $ \(CGround g, CPosition pos) ->
-      render pos (s {clip = Just g})
+    render :: forall s. (Sprite s) => (V2 Double, s) -> IO ()
+    render (p, a) = renderSprite r (toScreen p) a
+    cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> (V2 Double, s)) -> System' (IO ())
+    cdraw f = cfoldM (\acc c -> pure (acc >> render (f c))) mempty
+    drawSheet :: forall c. (Members World IO (Clip c), Get World IO (Clip c), Ord c) => Sheet c -> System' (IO ())
+    drawSheet s = cdraw $ \(Clip c, CPosition pos) ->
+      (pos, (s {clip = Just c}))
     drawPlayer :: Env.Player -> System' (IO ())
     drawPlayer Env.Player {idle} =
-      cM $ \(CPlayer, CPosition pos, CAnimation time dur) ->
-        render pos (linear time dur idle)
+      cdraw $ \(CPlayer, CPosition pos, CAnimation time dur) ->
+        (pos, linear time dur idle)
 
 step :: Env.Env -> Double -> [Action] -> System' World
 step _ dt es = do

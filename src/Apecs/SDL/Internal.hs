@@ -12,6 +12,7 @@
 
 module Apecs.SDL.Internal where
 
+import Control.Arrow ((&&&))
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Fixed
@@ -21,8 +22,9 @@ import Data.Proxy
 import Data.Text (Text)
 import Data.Type.Equality ((:~:) (Refl))
 import Foreign.C.Types
-import GHC.TypeLits
+import GHC.Natural
 import GHC.TypeLits.Compare (isLE)
+import GHC.TypeNats
 import Language.Haskell.TH
 import Linear (V2 (..))
 import qualified SDL
@@ -41,21 +43,21 @@ type Frame (n :: Nat) = Proxy n
 
 type Point a = V2 a
 
-data Sheet a = Sheet {clip :: Maybe a, texture :: Texture, frames :: Map.Map a (SDL.Rectangle CInt)}
+data Sheet a = Sheet {clip :: Maybe a, texture :: Texture, clips :: Map.Map a (SDL.Rectangle CInt)}
 
-data Animation (n :: Nat) where
-  Animation :: (KnownNat a, a <= n, 1 <= a, 1 <= n) => {frame :: Frame a, sheet :: Sheet Integer} -> Animation n
+data ASheet (n :: Nat) where
+  ASheet :: (KnownNat a, a <= n, 1 <= a, 1 <= n) => {frame :: Frame a, sheet :: Sheet Natural} -> ASheet n
 
 instance Sprite Texture where
   getFrame _ = Nothing
   getTexture = id
 
 instance (Ord a, Eq a) => Sprite (Sheet a) where
-  getFrame Sheet {clip, frames} = clip >>= (`Map.lookup` frames)
+  getFrame Sheet {clip, clips} = clip >>= (`Map.lookup` clips)
   getTexture = texture
 
-instance Sprite (Animation a) where
-  getFrame Animation {frame, sheet} = getFrame (sheet {clip = Just n})
+instance Sprite (ASheet a) where
+  getFrame ASheet {frame, sheet} = getFrame (sheet {clip = Just n})
     where
       n = natVal frame
   getTexture = texture . sheet
@@ -66,33 +68,48 @@ mkTexture = Texture
 mkSheet :: Texture -> Map.Map a (SDL.Rectangle CInt) -> Sheet a
 mkSheet = Sheet Nothing
 
-mkAnimation :: forall n. (KnownNat n, 1 <= n) => Texture -> Animation n
-mkAnimation t@(Texture _ ti) = Animation (Proxy @1) (mkSheet t (frames size))
+mkASheet :: forall n i. (Integral i, KnownNat n, 1 <= n) => Texture -> (i, i) -> ASheet n
+mkASheet t@(Texture _ ti) (w, h) = ASheet (Proxy @1) (mkSheet t clips)
   where
+    size :: Natural
     size = natVal (Proxy :: Proxy n)
-    (w, h) = (SDL.textureWidth ti `div` fromIntegral size, SDL.textureHeight ti)
-    frames :: Integer -> Map.Map Integer (SDL.Rectangle CInt)
-    frames 0 = mempty
-    frames n = Map.insert n (mkRect (w * fromIntegral (n - 1)) 0 w h) (frames (n - 1))
+    tw :: i
+    tw = fromIntegral $ SDL.textureWidth ti
+    clips :: Map.Map Natural (SDL.Rectangle CInt)
+    clips = Map.fromList $ rect <$> [0 .. size]
+      where
+        rect n =
+          let k = fromIntegral n
+              x = (w * k) `mod` tw
+              y = ((w * k) `div` tw) * h
+           in (n, fromIntegral <$> mkRect x y w h)
 
-animate :: forall b n. (KnownNat b, KnownNat n, 1 <= n, b <= n, 1 <= b) => Animation n -> Animation n
-animate (Animation _ sheet) = Animation f sheet
+animate :: forall b n. (KnownNat b, KnownNat n, 1 <= n, b <= n, 1 <= b) => ASheet n -> ASheet n
+animate (ASheet _ sheet) = ASheet f sheet
   where
     f = Proxy :: Frame b
 
-linear :: forall n. (KnownNat n, 1 <= n) => Double -> Double -> Animation n -> Animation n
+linear :: forall n. (KnownNat n, 1 <= n) => Double -> Double -> ASheet n -> ASheet n
 linear time duration = case nat of
-  Nothing -> animate @1
-  Just (SomeNat p) -> case (isLE (Proxy @1) p, isLE p (Proxy @n)) of
+  (SomeNat p) -> case (isLE (Proxy @1) p, isLE p (Proxy @n)) of
     (Just Refl, Just Refl) -> decide p
     (Just Refl, Nothing) -> animate @n
     (Nothing, Just Refl) -> animate @1
   where
+    size :: Natural
     size = natVal (Proxy @n)
+    norm :: Double
     norm = if duration == 0 then 0 else (time `mod'` duration) / duration
+    nat :: SomeNat
     nat = someNatVal (floor (fromIntegral size * norm))
-    decide :: forall p. (KnownNat p, 1 <= p, p <= n) => Proxy p -> Animation n -> Animation n
+    decide :: forall p. (KnownNat p, 1 <= p, p <= n) => Proxy p -> ASheet n -> ASheet n
     decide _ = animate @p
+
+mkClips :: forall a i. (Integral i, Enum a, Ord a, Bounded a) => (i, i) -> Map.Map a (SDL.Rectangle CInt)
+mkClips (w, h) = Map.fromList $ zipWith (\e x -> (e, mkRect (fromIntegral x) 0 (fromIntegral w) (fromIntegral h))) es xs
+  where
+    xs = iterate (+ w) 0
+    es = [minBound .. maxBound]
 
 withSDL :: (MonadIO m) => m a -> m ()
 withSDL op = do
