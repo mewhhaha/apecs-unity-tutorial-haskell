@@ -62,6 +62,14 @@ newtype CPosition = CPosition Position
 
 data CPlayer = CPlayer
 
+data CGoal = CGoal
+
+data CEnemy = CEnemy
+
+data CZombie = CZombie
+
+data CVampire = CVampire
+
 newtype Clip a = Clip a
 
 type CGround = Clip Ground
@@ -89,6 +97,12 @@ instance Component CWall where type Storage CWall = Apecs.Map CWall
 
 instance Component CObstacle where type Storage CObstacle = Apecs.Map CObstacle
 
+instance Component CEnemy where type Storage CEnemy = Apecs.Map CEnemy
+
+instance Component CVampire where type Storage CVampire = Apecs.Map CVampire
+
+instance Component CZombie where type Storage CZombie = Apecs.Map CZombie
+
 instance Component CProp where type Storage CProp = Apecs.Map CProp
 
 instance Component CTime where type Storage CTime = Apecs.Global CTime
@@ -105,3 +119,5 @@ instance Semigroup CIsRunning where
 instance Monoid CIsRunning where mempty = Stopped
 
 instance Component CPlayer where type Storage CPlayer = Unique CPlayer
+
+instance Component CGoal where type Storage CGoal = Unique CGoal

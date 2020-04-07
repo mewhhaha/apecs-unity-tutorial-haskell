@@ -25,7 +25,11 @@ makeWorld
     ''CGround,
     ''CWall,
     ''CObstacle,
-    ''CProp
+    ''CProp,
+    ''CGoal,
+    ''CEnemy,
+    ''CVampire,
+    ''CZombie
   ]
 
 type System' a = System World a
