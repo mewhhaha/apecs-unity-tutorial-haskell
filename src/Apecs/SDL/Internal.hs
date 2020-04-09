@@ -76,10 +76,10 @@ mkASheet t@(Texture _ ti) (w, h) = ASheet (Proxy @1) (mkSheet t clips)
     tw :: i
     tw = fromIntegral $ SDL.textureWidth ti
     clips :: Map.Map Natural (SDL.Rectangle CInt)
-    clips = Map.fromList $ rect <$> [0 .. size]
+    clips = Map.fromList $ rect <$> [1 .. size]
       where
         rect n =
-          let k = fromIntegral n
+          let k = fromIntegral n - 1
               x = (w * k) `mod` tw
               y = ((w * k) `div` tw) * h
            in (n, fromIntegral <$> mkRect x y w h)
@@ -101,7 +101,7 @@ linear time duration = case nat of
     norm :: Double
     norm = if duration == 0 then 0 else (time `mod'` duration) / duration
     nat :: SomeNat
-    nat = someNatVal (floor (fromIntegral size * norm))
+    nat = someNatVal (floor (fromIntegral size * norm) + 1)
     decide :: forall p. (KnownNat p, 1 <= p, p <= n) => Proxy p -> ASheet n -> ASheet n
     decide _ = animate @p
 

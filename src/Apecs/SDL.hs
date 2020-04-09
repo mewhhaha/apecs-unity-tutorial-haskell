@@ -7,7 +7,7 @@ module Apecs.SDL
 where
 
 import Apecs (System, ask, runWith)
-import qualified Apecs.SDL.Internal as C
+import qualified Apecs.SDL.Internal as Internal
 import Control.Monad.Extra (unless, when, whileM)
 import Control.Monad.Reader
 import Data.Functor.Compose
@@ -27,16 +27,16 @@ draw r w drawSystem = do
   runWith w (drawSystem r)
   SDL.present r
 
-renderSprite :: (Integral p, C.Sprite a) => SDL.Renderer -> C.Point p -> a -> IO ()
-renderSprite r (V2 x y) s = renderTexture r t f (C.mkRect (fromIntegral x) (fromIntegral y) w h)
+renderSprite :: (Integral p, Internal.Sprite a) => SDL.Renderer -> Internal.Point p -> a -> IO ()
+renderSprite r (V2 x y) s = renderTexture r t f (Internal.mkRect (fromIntegral x) (fromIntegral y) w h)
   where
-    (C.Texture t ti) = C.getTexture s
+    (Internal.Texture t ti) = Internal.getTexture s
     size = V2 (SDL.textureWidth ti) (SDL.textureHeight ti)
-    f = C.getFrame s
+    f = Internal.getFrame s
     (V2 w h) = maybe size (\(SDL.Rectangle _ size') -> size') f
 
 moveTo :: SDL.Rectangle a -> (a, a) -> SDL.Rectangle a
-moveTo (SDL.Rectangle _ d) (x, y) = SDL.Rectangle (C.mkPoint x y) d
+moveTo (SDL.Rectangle _ d) (x, y) = SDL.Rectangle (Internal.mkPoint x y) d
 
 renderTexture ::
   (Integral a) =>
@@ -66,10 +66,10 @@ play ::
   (env -> SDL.Renderer -> System w ()) ->
   IO ()
 play world createEnv handleEvents stepSystem drawSystem =
-  C.withSDL . C.withSDLImage $ do
-    C.setHintQuality
-    C.withWindow "My game" windowSize $ \w ->
-      C.withRenderer w $ \r -> do
+  Internal.withSDL . Internal.withSDLImage $ do
+    Internal.setHintQuality
+    Internal.withWindow "My game" windowSize $ \w ->
+      Internal.withRenderer w $ \r -> do
         env <- createEnv r
         t <- SDL.time
         print t
@@ -82,4 +82,4 @@ play world createEnv handleEvents stepSystem drawSystem =
                 curr
                 (stepSystem env dt as)
             draw r next (drawSystem env)
-            return (any C.isQuitEvent events, next)
+            return (any Internal.isQuitEvent events, next)

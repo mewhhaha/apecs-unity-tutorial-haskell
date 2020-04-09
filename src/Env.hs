@@ -7,7 +7,7 @@ module Env where
 import Apecs.SDL.Internal (ASheet, Sheet, mkRect, mkSheet)
 import qualified Data.Map as Map
 import Foreign.C.Types
-import Game.Component
+import qualified Game.Component as C
 import qualified SDL
 
 data Zombie
@@ -34,8 +34,8 @@ data Env
       { zombie :: Zombie,
         vampire :: Vampire,
         player :: Player,
-        prop :: Sheet Prop,
-        ground :: Sheet Ground,
-        obstacle :: Sheet Obstacle,
-        wall :: Sheet Wall
+        prop :: Sheet C.Prop,
+        ground :: Sheet C.Ground,
+        obstacle :: Sheet C.Obstacle,
+        wall :: Sheet C.Wall
       }

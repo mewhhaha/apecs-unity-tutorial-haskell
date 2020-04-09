@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2d956e7ca0fa59496abb62dac3c70a3cfc4b56a2b6bc21b8d18676d3a9ca52b4
+-- hash: b21a8af6278fd54993b7ba74b64f7bf4d28cac152b2365ad6f96c94508f98530
 
 name:           game
 version:        0.1.0.0
@@ -27,10 +27,13 @@ library
   exposed-modules:
       Apecs.SDL
       Apecs.SDL.Internal
+      Enemy.Vampire
+      Enemy.Zombie
       Env
       Event
       Game.Component
       Game.World
+      Player.Player
       Run
   other-modules:
       Paths_game

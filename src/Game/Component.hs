@@ -24,6 +24,15 @@ defaultEnumRandomR (lo, hi) g = (toEnum i, g')
 defaultBoundedRandom :: (Random a, Bounded a, RandomGen g) => g -> (a, g)
 defaultBoundedRandom = randomR (minBound, maxBound)
 
+data Player = PIdle | PHurt | PAttack
+  deriving (Enum, Eq, Bounded)
+
+data Zombie = ZIdle | ZAttack
+  deriving (Enum, Bounded)
+
+data Vampire = VIdle | VAttack
+  deriving (Enum, Bounded)
+
 data Prop = Drink | Apples | Exit
   deriving (Eq, Ord, Enum, Bounded)
 
@@ -56,19 +65,24 @@ type Position = V2 Double
 
 data CDrawable = Drawable
 
+data Enemy
+  = Enemy
+      { hitpoints :: Word
+      }
+
 newtype CTime = CTime Integer
 
 newtype CPosition = CPosition Position
 
-data CPlayer = CPlayer
+newtype CPlayer = CPlayer Player
 
 data CGoal = CGoal
 
-data CEnemy = CEnemy
+newtype CEnemy = CEnemy Enemy
 
-data CZombie = CZombie
+newtype CZombie = CZombie Zombie
 
-data CVampire = CVampire
+newtype CVampire = CVampire Vampire
 
 newtype Clip a = Clip a
 

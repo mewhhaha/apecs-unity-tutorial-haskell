@@ -13,7 +13,7 @@
 
 module Run where
 
-import Apecs (EntityCounter, Get, Has, Members, Set, ask, cfold, cfoldM, cmap, lift, newEntity, runWith)
+import Apecs (Entity (..), EntityCounter, Get, Has, Members, Not (..), Set, ask, cfold, cfoldM, cmap, cmapM, lift, modify, newEntity, runWith)
 import Apecs.SDL (play, renderSprite)
 import Apecs.SDL.Internal (ASheet, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
 import Control.Arrow
@@ -24,12 +24,15 @@ import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
+import qualified Enemy.Vampire as Vampire
+import qualified Enemy.Zombie as Zombie
 import qualified Env
 import Event (isKeyDown)
 import GHC.TypeNats
 import Game.Component
 import Game.World (System', World)
 import Linear (V2 (..))
+import qualified Player.Player as Player
 import qualified SDL
 import System.FilePath.Posix ((</>))
 import System.Random
@@ -37,6 +40,10 @@ import System.Random
 data Direction = North | East | South | West
 
 data Action = Move Direction | Quit
+
+whenJust :: Applicative m => Maybe a -> (a -> m ()) -> m ()
+whenJust Nothing _ = pure ()
+whenJust (Just a) f = f a
 
 spread :: RandomGen r => [V2 Double] -> Int -> r -> [V2 Double]
 spread positions starts g = Set.toList . Set.fromList . concat $ start <$> gs
@@ -74,9 +81,9 @@ initialize = do
   newEnumsAt (randoms @Ground g1) ground
   newEnumsAt (randoms @Wall g2) (hedges ++ vedges)
   newEnumsAt (randoms @Obstacle g3) obstacles
-  sequence_ $ newEntity . (CEnemy,CZombie,CAnimation 0 0.8,) . CPosition <$> zombies
-  sequence_ $ newEntity . (CEnemy,CVampire,CAnimation 0 0.5,) . CPosition <$> vampires
-  newEntity (CPlayer, CPosition (V2 1 (last ys - 1)), CAnimation 0 0.5)
+  sequence_ $ Zombie.new <$> zombies
+  sequence_ $ Vampire.new <$> vampires
+  Player.new (V2 1 (last ys - 1))
   newEntity (CGoal, CPosition (V2 (last xs - 1) 1), Clip Exit)
   pure ()
   where
@@ -151,45 +158,108 @@ events :: Env.Env -> [SDL.Event] -> [Action]
 events _ es = lefts $ movement . Right <$> es
 
 draw :: Env.Env -> SDL.Renderer -> System' ()
-draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
-  draws <- sequence [drawSheet ground, drawSheet wall, drawSheet obstacle, drawSheet prop, drawPlayer player, drawVampire vampire, drawZombie zombie]
-  lift . sequence_ $ draws
+draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r =
+  sequence_
+    [ drawSheet ground,
+      drawSheet wall,
+      drawSheet obstacle,
+      drawSheet prop,
+      drawPlayer player,
+      drawVampire vampire,
+      drawZombie zombie
+    ]
   where
     toScreen :: Integral a => V2 Double -> V2 a
     toScreen p = round . (* 32) <$> p
     render :: forall s. (Sprite s) => (V2 Double, s) -> IO ()
     render (p, a) = renderSprite r (toScreen p) a
-    cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> (V2 Double, s)) -> System' (IO ())
-    cdraw f = cfoldM (\acc c -> pure (acc >> render (f c))) mempty
-    drawSheet :: forall c. (Members World IO (Clip c), Get World IO (Clip c), Ord c) => Sheet c -> System' (IO ())
+    cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> (V2 Double, s)) -> System' ()
+    cdraw f = cfoldM (\acc c -> pure (acc >> render (f c))) mempty >>= lift
+    drawSheet :: forall c. (Members World IO (Clip c), Get World IO (Clip c), Ord c) => Sheet c -> System' ()
     drawSheet s = cdraw $ \(Clip c, CPosition pos) ->
       (pos, (s {clip = Just c}))
-    drawAnimation :: forall c n. (KnownNat n, 1 <= n, Members World IO c, Get World IO c) => ASheet n -> System' (IO ())
-    drawAnimation sheet = cdraw $ \(_ :: c, CPosition pos, CAnimation time dur) -> (pos, linear time dur sheet)
-    drawPlayer :: Env.Player -> System' (IO ())
-    drawPlayer Env.Player {idle} = drawAnimation @CPlayer idle
-    drawVampire :: Env.Vampire -> System' (IO ())
-    drawVampire Env.Vampire {idle} = drawAnimation @CVampire idle
-    drawZombie :: Env.Zombie -> System' (IO ())
-    drawZombie Env.Zombie {idle} = drawAnimation @CZombie idle
+    drawAnimation :: forall c. (Members World IO c, Get World IO c) => (V2 Double -> Double -> Double -> c -> IO ()) -> System' ()
+    drawAnimation f = cfoldM (\acc (c :: c, CPosition pos, CAnimation time dur) -> pure (acc >> f pos time dur c)) mempty >>= lift
+    drawPlayer :: Env.Player -> System' ()
+    drawPlayer Env.Player {idle, hurt, attack} = drawAnimation @CPlayer $
+      \pos time dur (CPlayer p) ->
+        let render' :: forall n. (KnownNat n, 1 <= n) => ASheet n -> IO ()
+            render' = render . (pos,) . linear time dur
+         in case p of
+              PIdle -> render' idle
+              PHurt -> render' hurt
+              PAttack -> render' attack
+    drawVampire :: Env.Vampire -> System' ()
+    drawVampire Env.Vampire {idle, attack} = drawAnimation @CVampire $
+      \pos time dur (CVampire p) ->
+        let render' :: forall n. (KnownNat n, 1 <= n) => ASheet n -> IO ()
+            render' = render . (pos,) . linear time dur
+         in case p of
+              VIdle -> render' idle
+              VAttack -> render' attack
+    drawZombie :: Env.Zombie -> System' ()
+    drawZombie Env.Zombie {idle, attack} = drawAnimation @CZombie $
+      \pos time dur (CZombie p) ->
+        let render' :: forall n. (KnownNat n, 1 <= n) => ASheet n -> IO ()
+            render' = render . (pos,) . linear time dur
+         in case p of
+              ZIdle -> render' idle
+              ZAttack -> render' attack
+
+move :: Action -> Position -> Position
+move (Move m) p = p + case m of
+  East -> V2 distance 0
+  West -> V2 (- distance) 0
+  South -> V2 0 distance
+  North -> V2 0 (- distance)
+  where
+    distance = 1
+move _ p = p
+
+playerAttack :: Map.Map Position Entity -> Maybe Position -> System' ()
+playerAttack enemies = flip whenJust $
+  \next -> cmapM $ \(CPlayer p, CPosition prev) -> case (p, Map.lookup next enemies) of
+    (PAttack, _) -> pure $ Left ()
+    (_, Nothing) -> pure $ Left ()
+    (_, Just enemy) -> do
+      modify enemy (\(CEnemy Enemy {hitpoints}) -> CEnemy (Enemy {hitpoints = hitpoints - 1}))
+      pure $ Right (CPlayer PAttack, Player.attack)
+
+playerMove :: Map.Map Position a -> Maybe Position -> System' ()
+playerMove occupied = flip whenJust $
+  \next -> cmap $ \(CPlayer p, CPosition prev) ->
+    if prev == next || Map.member next occupied then Left () else Right (CPlayer PIdle, Player.idle, CPosition next)
+
+playerAnimate :: System' ()
+playerAnimate = cmap $ \(CPlayer p, CAnimation time duration) ->
+  if time <= duration
+    then Left ()
+    else Right (CPlayer PIdle, Player.idle)
+
+stepAnimation :: Double -> System' ()
+stepAnimation dt = cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
+
+killEnemies :: System' ()
+killEnemies = cmap $ \(CEnemy Enemy {hitpoints}) -> case hitpoints of
+  0 -> Left $ Not @(CEnemy, CAnimation, CZombie, CVampire, CPosition)
+  _ -> Right ()
 
 step :: Env.Env -> Double -> [Action] -> System' World
-step _ dt es = do
+step _ dt as = do
   walls <- cfold (getPositions @CWall) mempty
   obstacles <- cfold (getPositions @CObstacle) mempty
-  let occupied = Set.union walls obstacles
-  cmap $ \(CPlayer, CPosition prev) -> let next = foldr update prev es in Just . CPosition $ if Set.member next occupied then prev else next
-  cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
+  enemies <- cfold (getPositions @CEnemy) mempty
+  let occupied = walls `Map.union` obstacles `Map.union` enemies
+  next <- listToMaybe <$> cfold (\_ (CPlayer _, CPosition pos) -> [foldr move pos as]) []
+  playerAttack enemies next
+  playerMove occupied next
+  playerAnimate
+  killEnemies
+  stepAnimation dt
   ask
   where
-    getPositions :: forall c. (Members World IO c, Get World IO c) => Set.Set Position -> (c, CPosition) -> Set.Set Position
-    getPositions acc (_, CPosition pos) = Set.insert pos acc
-    distance = 1
-    update (Move East) p = p + V2 distance 0
-    update (Move West) p = p + V2 (- distance) 0
-    update (Move South) p = p + V2 0 distance
-    update (Move North) p = p + V2 0 (- distance)
-    update _ p = p
+    getPositions :: forall c. (Members World IO c, Get World IO c) => Map.Map Position Entity -> (c, Entity, CPosition) -> Map.Map Position Entity
+    getPositions acc (_, e, CPosition pos) = Map.insert pos e acc
 
 run :: World -> IO ()
 run w = do
