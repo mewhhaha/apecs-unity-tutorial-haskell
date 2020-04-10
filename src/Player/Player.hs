@@ -10,7 +10,7 @@ idle = CAnimation 0 0.5
 
 attack = CAnimation 0 0.2
 
-hurt = CAnimation 0 0.2
+hurt = CAnimation 0 0.5
 
 new :: V2 Double -> System' ()
-new position = void $ newEntity (CPlayer PIdle, CActions [], CPosition position, idle)
+new position = void $ newEntity (CPlayer PIdle, CStat Stat {hitpoints = 10}, CActions [], CPosition position, idle)

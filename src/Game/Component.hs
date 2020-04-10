@@ -74,8 +74,8 @@ type Position = V2 Double
 
 data CDrawable = Drawable
 
-newtype Enemy
-  = Enemy
+newtype Stat
+  = Stat
       { hitpoints :: Int
       }
 
@@ -87,7 +87,9 @@ newtype CPlayer = CPlayer Player
 
 data CGoal = CGoal
 
-newtype CEnemy = CEnemy Enemy
+newtype CStat = CStat Stat
+
+data CEnemy = CEnemy
 
 newtype CZombie = CZombie Zombie
 
@@ -111,6 +113,8 @@ data CAnimation = CAnimation Double Double
 newtype CActions = CActions [Action]
 
 instance Component CPosition where type Storage CPosition = Apecs.Map CPosition
+
+instance Component CStat where type Storage CStat = Apecs.Map CStat
 
 instance Component CActions where type Storage CActions = Apecs.Map CActions
 

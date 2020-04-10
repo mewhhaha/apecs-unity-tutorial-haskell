@@ -31,7 +31,8 @@ makeWorld
     ''CEnemy,
     ''CVampire,
     ''CZombie,
-    ''CActions
+    ''CActions,
+    ''CStat
   ]
 
 type System' a = System World a

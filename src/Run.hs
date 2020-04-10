@@ -278,11 +278,20 @@ playerAnimate = cmap $ \(CPlayer _, CAnimation time duration) ->
     then Left ()
     else Right (CPlayer PIdle, Player.idle)
 
+playerHurt :: System' ()
+playerHurt = cmapM $ \(CPlayer _, CStat Stat {hitpoints}, e :: Entity) -> do
+  damage <- consumeHurt e
+  pure $
+    if damage == 0
+      then Left ()
+      else Right (CPlayer PHurt, CStat Stat {hitpoints = hitpoints - fromIntegral damage})
+
 stepPlayer :: Set.Set Position -> Map.Map Position Entity -> System' ()
 stepPlayer occupied enemies = cmapM_ $ \(CPlayer p, CActions actions, CPosition prev, e :: Entity) -> do
-  move <- consumeMove e
-  let next = maybeIf (/= prev) (prev + move)
+  offset <- consumeMove e
+  let next = maybeIf (/= prev) (prev + offset)
   playerAttack enemies next
+  playerHurt
   playerMove occupied next
   playerAnimate
 
@@ -290,24 +299,27 @@ stepAnimation :: Double -> System' ()
 stepAnimation dt = cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
 
 enemiesDie :: System' ()
-enemiesDie = cmap $ \(CEnemy Enemy {hitpoints}) ->
+enemiesDie = cmap $ \(CEnemy, CStat Stat {hitpoints}) ->
   if hitpoints <= 0
-    then Left $ Not @(CEnemy, CAnimation, CZombie, CVampire, CPosition)
+    then Left $ Not @(CEnemy, CAnimation, CZombie, CVampire, CPosition, CStat, CActions)
     else Right ()
 
 enemiesHurt :: System' ()
-enemiesHurt = cmapM $ \(CEnemy Enemy {hitpoints}, e :: Entity) -> do
+enemiesHurt = cmapM $ \(CEnemy, CStat Stat {hitpoints}, e :: Entity) -> do
   damage <- consumeHurt e
-  pure (CEnemy Enemy {hitpoints = hitpoints - fromIntegral damage})
+  pure (CStat Stat {hitpoints = hitpoints - fromIntegral damage})
 
-enemiesMove :: Set.Set Position -> System' ()
-enemiesMove = cfoldM_ $ \occupied (CEnemy _, CPosition pos, e :: Entity) -> do
+enemiesMove :: Position -> Entity -> Set.Set Position -> System' ()
+enemiesMove player playerEntity = cfoldM_ $ \occupied (CEnemy, CPosition pos, e :: Entity) -> do
   g <- lift newStdGen
   let (direction, _) = random g
       next = move direction + pos
-  if Set.member next occupied
-    then pure occupied
-    else do
+  case (Set.member next occupied, player == next) of
+    (_, True) -> do
+      modify playerEntity (\(CActions actions) -> CActions (Hurt 1 : actions))
+      pure occupied
+    (True, _) -> pure occupied
+    _ -> do
       set e (CPosition next)
       pure (Set.insert next . Set.delete pos $ occupied)
 
@@ -315,8 +327,8 @@ stepEnemies :: Set.Set Position -> Bool -> System' ()
 stepEnemies occupied shouldUpdate =
   if not shouldUpdate
     then pure ()
-    else cmapM_ $ \(CPlayer _, CPosition player) -> do
-      enemiesMove (Set.insert player occupied)
+    else cmapM_ $ \(CPlayer _, CPosition player, e :: Entity) -> do
+      enemiesMove player e occupied
       enemiesHurt
       enemiesDie
       pure ()
