@@ -27,11 +27,20 @@ defaultBoundedRandom = randomR (minBound, maxBound)
 data Player = PIdle | PHurt | PAttack
   deriving (Enum, Eq, Bounded)
 
+data Direction = North | East | South | West
+  deriving (Eq, Enum, Ord, Bounded)
+
+instance Random Direction where
+  randomR = defaultEnumRandomR
+  random = defaultBoundedRandom
+
 data Zombie = ZIdle | ZAttack
   deriving (Enum, Bounded)
 
 data Vampire = VIdle | VAttack
   deriving (Enum, Bounded)
+
+data Action = Move Direction | Hurt Word
 
 data Prop = Drink | Apples | Exit
   deriving (Eq, Ord, Enum, Bounded)
@@ -65,9 +74,9 @@ type Position = V2 Double
 
 data CDrawable = Drawable
 
-data Enemy
+newtype Enemy
   = Enemy
-      { hitpoints :: Word
+      { hitpoints :: Int
       }
 
 newtype CTime = CTime Integer
@@ -99,7 +108,11 @@ data CIsRunning = Running | Paused | Stopped
 
 data CAnimation = CAnimation Double Double
 
+newtype CActions = CActions [Action]
+
 instance Component CPosition where type Storage CPosition = Apecs.Map CPosition
+
+instance Component CActions where type Storage CActions = Apecs.Map CActions
 
 instance Component CDrawable where type Storage CDrawable = Apecs.Map CDrawable
 

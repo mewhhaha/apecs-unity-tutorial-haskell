@@ -13,4 +13,4 @@ attack = CAnimation 0 0.2
 hurt = CAnimation 0 0.2
 
 new :: V2 Double -> System' ()
-new position = void $ newEntity (CPlayer PIdle, CPosition position, idle)
+new position = void $ newEntity (CPlayer PIdle, CActions [], CPosition position, idle)

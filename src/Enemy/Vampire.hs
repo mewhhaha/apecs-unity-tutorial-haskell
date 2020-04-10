@@ -9,4 +9,4 @@ import Linear (V2)
 idle = CAnimation 0 0.5
 
 new :: V2 Double -> System' ()
-new position = void $ newEntity (CEnemy (Enemy {hitpoints = 2}), CVampire VIdle, idle, CPosition position)
+new position = void $ newEntity (CEnemy (Enemy {hitpoints = 2}), CActions [], CVampire VIdle, idle, CPosition position)

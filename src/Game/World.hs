@@ -12,6 +12,7 @@
 module Game.World where
 
 import Apecs
+import Control.Monad.Fail
 import Game.Component
 
 makeWorld
@@ -29,7 +30,11 @@ makeWorld
     ''CGoal,
     ''CEnemy,
     ''CVampire,
-    ''CZombie
+    ''CZombie,
+    ''CActions
   ]
 
 type System' a = System World a
+
+instance MonadFail (SystemT World IO) where
+  fail s = lift (Prelude.fail s)
