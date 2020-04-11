@@ -10,7 +10,6 @@
 module Game.Component where
 
 import Apecs
-import Data.Array
 import GHC.TypeNats
 import Linear
 import Linear.V2

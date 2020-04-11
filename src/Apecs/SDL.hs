@@ -9,13 +9,13 @@ where
 import Apecs (System, ask, runWith)
 import qualified Apecs.SDL.Internal as Internal
 import Control.Monad.Extra (unless, when, whileM)
-import Control.Monad.Reader
 import Data.Functor.Compose
 import qualified Data.Map as Map
 import Foreign.C.Types
 import qualified SDL
 import SDL (($=), V2 (..), V4 (..))
 import qualified SDL.Image
+import qualified SDL.Mixer
 
 windowSize :: Integral a => (a, a)
 windowSize = (640, 480)
@@ -48,7 +48,7 @@ renderTexture ::
 renderTexture r t mask pos =
   SDL.copy r t (fmap fromIntegral <$> mask) (Just $ fromIntegral <$> pos)
 
-loop :: (MonadIO m) => Double -> a -> (Double -> a -> m (Bool, a)) -> m ()
+loop :: Double -> a -> (Double -> a -> IO (Bool, a)) -> IO ()
 loop prev a op = do
   time <- SDL.time
   (quit, a') <- op (time - prev) a
@@ -66,20 +66,22 @@ play ::
   (env -> SDL.Renderer -> System w ()) ->
   IO ()
 play world createEnv handleEvents stepSystem drawSystem =
-  Internal.withSDL . Internal.withSDLImage $ do
-    Internal.setHintQuality
-    Internal.withWindow "My game" windowSize $ \w ->
-      Internal.withRenderer w $ \r -> do
-        env <- createEnv r
-        t <- SDL.time
-        print t
-        loop 0 world $
-          \dt curr -> do
-            events <- SDL.pollEvents
-            let as = handleEvents env events
-            next <-
-              runWith
-                curr
-                (stepSystem env dt as)
-            draw r next (drawSystem env)
-            return (any Internal.isQuitEvent events, next)
+  Internal.withSDL
+    . Internal.withSDLImage
+    . Internal.withAudio SDL.Mixer.defaultAudio 256
+    $ do
+      Internal.setHintQuality
+      Internal.withWindow "My game" windowSize $ \w ->
+        Internal.withRenderer w $ \r -> do
+          env <- createEnv r
+          t <- SDL.time
+          loop 0 world $
+            \dt curr -> do
+              events <- SDL.pollEvents
+              let as = handleEvents env events
+              next <-
+                runWith
+                  curr
+                  (stepSystem env dt as)
+              draw r next (drawSystem env)
+              return (any Internal.isQuitEvent events, next)

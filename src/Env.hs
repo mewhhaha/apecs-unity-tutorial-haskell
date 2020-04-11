@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 import Foreign.C.Types
 import qualified Game.Component as C
 import qualified SDL
+import qualified SDL.Mixer
 
 data Zombie
   = Zombie
@@ -26,7 +27,8 @@ data Player
   = Player
       { idle :: ASheet 6,
         attack :: ASheet 2,
-        hurt :: ASheet 2
+        hurt :: ASheet 2,
+        sfxFootstep :: [SDL.Mixer.Chunk]
       }
 
 data Env

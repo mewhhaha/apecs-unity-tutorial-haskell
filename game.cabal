@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b21a8af6278fd54993b7ba74b64f7bf4d28cac152b2365ad6f96c94508f98530
+-- hash: e054dd26acd0046a16a83101f111db04bbc86b54bce357b0dfa3743f103a0cf4
 
 name:           game
 version:        0.1.0.0
@@ -40,20 +40,17 @@ library
   hs-source-dirs:
       src
   build-depends:
-      MonadRandom
-    , apecs
-    , array
+      apecs
     , astar
     , base >=4.7 && <5
-    , constraints
     , containers
     , extra
     , filepath
     , linear
-    , mtl
     , random
     , sdl2
     , sdl2-image
+    , sdl2-mixer
     , template-haskell
     , text
     , typelits-witnesses

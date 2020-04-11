@@ -30,6 +30,7 @@ import Linear (V2 (..))
 import qualified SDL
 import SDL (($=))
 import qualified SDL.Image
+import qualified SDL.Mixer
 
 data Texture = Texture SDL.Texture SDL.TextureInfo
 
@@ -113,7 +114,7 @@ mkClips (w, h) = Map.fromList $ zipWith (\e x -> (e, mkRect (fromIntegral x) 0 (
 
 withSDL :: (MonadIO m) => m a -> m ()
 withSDL op = do
-  SDL.initialize [SDL.InitVideo]
+  SDL.initialize [SDL.InitVideo, SDL.InitAudio]
   void op
   SDL.quit
 
@@ -138,6 +139,14 @@ withRenderer w op = do
   r <- SDL.createRenderer w (-1) rendererConfig
   void $ op r
   SDL.destroyRenderer r
+
+withAudio :: (MonadIO m) => SDL.Mixer.Audio -> SDL.Mixer.ChunkSize -> m () -> m ()
+withAudio audio chunkSize op = do
+  SDL.Mixer.initialize []
+  SDL.Mixer.openAudio audio chunkSize
+  op
+  SDL.Mixer.closeAudio
+  SDL.Mixer.quit
 
 rendererConfig :: SDL.RendererConfig
 rendererConfig =

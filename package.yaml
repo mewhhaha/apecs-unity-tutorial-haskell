@@ -3,16 +3,13 @@ library:
   dependencies:
     - sdl2
     - sdl2-image
-    - array
+    - sdl2-mixer
     - apecs
     - linear
     - containers
     - astar
     - random
-    - MonadRandom
     - extra
-    - constraints
-    - mtl
     - filepath
     - template-haskell
     - typelits-witnesses
