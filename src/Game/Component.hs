@@ -10,6 +10,7 @@
 module Game.Component where
 
 import Apecs
+import Data.List.NonEmpty (NonEmpty)
 import GHC.TypeNats
 import Linear
 import Linear.V2
@@ -43,6 +44,12 @@ data Action = Move Direction | Hurt Word
 
 data Prop = Drink | Apples | Exit
   deriving (Eq, Ord, Enum, Bounded)
+
+data MoveTo
+  = MoveTo
+      { from :: V2 Double,
+        to :: V2 Double
+      }
 
 instance Random Prop where
   randomR = defaultEnumRandomR
@@ -104,18 +111,22 @@ type CObstacle = Clip Obstacle
 
 type CProp = Clip Prop
 
+newtype CMoveTo = CMoveTo MoveTo
+
 data CIsRunning = Running | Paused | Stopped
   deriving (Eq)
 
 data CAnimation = CAnimation Double Double
 
-newtype CActions = CActions [Action]
+newtype CActionStream = CActionStream (NonEmpty [Action])
 
 instance Component CPosition where type Storage CPosition = Apecs.Map CPosition
 
+instance Component CMoveTo where type Storage CMoveTo = Apecs.Map CMoveTo
+
 instance Component CStat where type Storage CStat = Apecs.Map CStat
 
-instance Component CActions where type Storage CActions = Apecs.Map CActions
+instance Component CActionStream where type Storage CActionStream = Apecs.Map CActionStream
 
 instance Component CDrawable where type Storage CDrawable = Apecs.Map CDrawable
 

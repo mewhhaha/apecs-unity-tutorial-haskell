@@ -43,6 +43,8 @@ import Control.Monad (forM_, when)
 import Data.Either
 import Data.Function
 import Data.List
+import Data.List.NonEmpty ((<|), NonEmpty (..))
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
@@ -61,6 +63,18 @@ import System.FilePath.Posix ((</>))
 import System.Random
 
 data Event = InputMove Direction | InputQuit
+
+send :: Entity -> Action -> System' ()
+send e action = modify e $ \(CActionStream (as :| rest)) -> CActionStream ((action : as) :| rest)
+
+sends :: Entity -> [Action] -> System' ()
+sends e actions = modify e $ \(CActionStream (as :| rest)) -> CActionStream ((actions ++ as) :| rest)
+
+tick :: Entity -> System' ()
+tick e = modify e $ \(CActionStream stream@(as :| rest)) -> CActionStream ([] <| stream)
+
+tickem :: forall c. (Members World IO c, Get World IO c) => System' ()
+tickem = cmap $ \(_ :: c, CActionStream stream@(as :| rest)) -> Just (CActionStream ([] <| stream))
 
 whenJust :: Applicative m => Maybe a -> (a -> m ()) -> m ()
 whenJust Nothing _ = pure ()
@@ -187,8 +201,157 @@ movement e = do
   pressed SDL.ScancodeDown (InputMove South)
   e
 
+dirToV2 :: Direction -> Position
+dirToV2 = \case
+  East -> V2 distance 0
+  West -> V2 (- distance) 0
+  South -> V2 0 distance
+  North -> V2 0 (- distance)
+  where
+    distance = 1
+
+peekActions :: (Action -> Maybe a) -> Entity -> System' [a]
+peekActions f e = do
+  actions <- unwrap <$> get e
+  pure $ catMaybes (f <$> actions)
+  where
+    unwrap (CActionStream actions) = NonEmpty.head actions
+
+sumHurt :: Entity -> System' Word
+sumHurt = fmap sum . peekActions sieveHurt
+  where
+    sieveHurt (Hurt d) = Just d
+    sieveHurt _ = Nothing
+
+sumMove :: Entity -> System' (V2 Double)
+sumMove = fmap sum . peekActions sieveMove
+  where
+    sieveMove (Move d) = Just (dirToV2 d)
+    sieveMove _ = Nothing
+
+playerAttack :: Map.Map Position Entity -> (Position -> Maybe Position) -> System' ()
+playerAttack enemies move = cmapM_ $ \(CPlayer p, CPosition pos, e :: Entity) ->
+  whenJust (move pos) $ \next ->
+    case (p, Map.lookup next enemies) of
+      (PAttack, _) -> pure ()
+      (_, Nothing) -> pure ()
+      (_, Just enemy) -> do
+        send enemy (Hurt 1)
+        set e (CPlayer PAttack, Player.attack)
+
+playerMove :: Set.Set Position -> (Position -> Maybe Position) -> System' ()
+playerMove occupied move = cmapM_ $ \(CPlayer _, CPosition pos, e :: Entity) ->
+  whenJust (move pos) $ \next ->
+    when (Set.notMember next occupied) $ set e (CPlayer PIdle, Player.idle, CPosition next)
+
+finishAnimation :: forall c d. (Members World IO c, Get World IO c, Set World IO d) => d -> System' ()
+finishAnimation to = cmap $ \(_ :: c, CAnimation time duration) ->
+  eitherIf (const $ time >= duration) to
+
+playerAnimate :: System' ()
+playerAnimate = finishAnimation @CPlayer (CPlayer PIdle, Player.idle)
+
+playerCollide :: Set.Set Position -> System' ()
+playerCollide occupied = cmapM_ $ \(CPlayer _, CPosition pos, e :: Entity) ->
+  let directions = find (`Set.notMember` occupied) $ (+ pos) . dirToV2 <$> [North, East, South, West]
+   in when (Set.member pos occupied) . whenJust directions $ \destination ->
+        set e (CPosition destination)
+
+playerHurt :: System' ()
+playerHurt = cmapM $ \(CPlayer _, CStat Stat {hitpoints}, e :: Entity) -> do
+  damage <- sumHurt e
+  pure $
+    eitherIf (const $ damage /= 0) (CPlayer PHurt, CStat Stat {hitpoints = hitpoints - fromIntegral damage})
+
+stepPlayer :: Set.Set Position -> Map.Map Position Entity -> System' ()
+stepPlayer occupied enemies =
+  cmapM_ $ \(CPlayer p, e :: Entity) -> do
+    offset <- sumMove e
+    let next pos = maybeIf (/= pos) (pos + offset)
+    playerCollide occupied
+    playerHurt
+    playerAttack enemies next
+    playerMove occupied next
+    tick e
+
+stepAnimation :: Double -> System' ()
+stepAnimation dt = do
+  cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
+  zombieAnimate
+  vampireAnimate
+  playerAnimate
+
+enemiesDie :: System' ()
+enemiesDie = cmap $ \(CEnemy, CStat Stat {hitpoints}) ->
+  eitherIf (const $ hitpoints <= 0) (Not @(CEnemy, CAnimation, CZombie, CVampire, CPosition, CStat, CActionStream))
+
+enemiesHurt :: System' ()
+enemiesHurt = cmapM $ \(CEnemy, CStat Stat {hitpoints}, e :: Entity) -> do
+  damage <- sumHurt e
+  pure (CStat Stat {hitpoints = hitpoints - fromIntegral damage})
+
+enemiesAttackMove :: forall c. Get World IO c => (Entity -> System' ()) -> Position -> Set.Set Position -> System' (Set.Set Position)
+enemiesAttackMove onAttack playerPosition = cfoldM $ \occupied (CEnemy, CPosition pos, _ :: c, e :: Entity) -> do
+  g <- lift newStdGen
+  let (direction, _) = random g
+      next = dirToV2 direction + pos
+  case (Set.member next occupied, playerPosition == next) of
+    (False, f) -> do
+      when f (onAttack e)
+      set e (CPosition next)
+      pure (Set.insert next . Set.delete pos $ occupied)
+    (True, _) -> pure occupied
+
+zombieAnimate :: System' ()
+zombieAnimate = finishAnimation @CZombie (CZombie ZIdle, Zombie.idle)
+
+vampireAnimate :: System' ()
+vampireAnimate = finishAnimation @CVampire (CVampire VIdle, Vampire.idle)
+
+stepEnemies :: Set.Set Position -> Bool -> System' ()
+stepEnemies occupied shouldUpdate =
+  when shouldUpdate . cmapM_ $ \(CPlayer _, CPosition playerPos, player :: Entity) -> do
+    let attackMove :: forall c. Get World IO c => (Entity -> System' ()) -> Set.Set Position -> System' (Set.Set Position)
+        attackMove f = enemiesAttackMove @c f playerPos
+        zombieAttackMove = attackMove @CZombie $ \zombie -> do
+          set zombie (CZombie ZAttack, Zombie.attack)
+          send player (Hurt 2)
+        vampireAttackMove = attackMove @CVampire $ \vampire -> do
+          set vampire (CVampire VAttack, Vampire.attack)
+          send player (Hurt 1)
+    vampireAttackMove occupied
+      >>= zombieAttackMove
+    enemiesHurt
+    enemiesDie
+    tickem @CEnemy
+
+toActions :: [Event] -> [Action]
+toActions = mapMaybe toAction
+  where
+    toAction (InputMove d) = Just (Move d)
+    toAction _ = Nothing
+
+stepEvents :: [Event] -> System' ()
+stepEvents events = cmapM_ $ \(CPlayer _, e :: Entity) -> sends e (toActions events)
+
 events :: Env.Env -> [SDL.Event] -> [Event]
 events _ es = lefts $ movement . Right <$> es
+
+step :: Env.Env -> Double -> [Event] -> System' World
+step _ dt actions = do
+  walls <- getEntities @CWall
+  obstacles <- getEntities @CObstacle
+  enemies <- getEntities @CEnemy
+  let occupied = foldl1 Set.union $ Map.keysSet <$> [walls, obstacles, enemies]
+      shouldUpdate = not . null $ actions
+  stepEvents actions
+  stepAnimation dt
+  stepPlayer occupied enemies
+  stepEnemies occupied shouldUpdate
+  ask
+  where
+    getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
+    getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
 
 draw :: Env.Env -> SDL.Renderer -> System' ()
 draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r =
@@ -238,158 +401,6 @@ draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r =
          in case p of
               ZIdle -> render' idle
               ZAttack -> render' attack
-
-dirToV2 :: Direction -> Position
-dirToV2 = \case
-  East -> V2 distance 0
-  West -> V2 (- distance) 0
-  South -> V2 0 distance
-  North -> V2 0 (- distance)
-  where
-    distance = 1
-
-consumeAction :: (Action -> Either a Action) -> Entity -> System' [a]
-consumeAction f e = do
-  (values, rest) <- partitionEithers . split <$> get e
-  set e (CActions rest)
-  return values
-  where
-    split (CActions actions) = f <$> actions
-
-consumeHurt :: Entity -> System' Word
-consumeHurt = fmap sum . consumeAction sieveHurt
-  where
-    sieveHurt (Hurt d) = Left d
-    sieveHurt a = Right a
-
-consumeMove :: Entity -> System' (V2 Double)
-consumeMove = fmap sum . consumeAction sieveMove
-  where
-    sieveMove (Move d) = Left (dirToV2 d)
-    sieveMove a = Right a
-
-playerAttack :: Map.Map Position Entity -> (Position -> Maybe Position) -> System' ()
-playerAttack enemies move = cmapM_ $ \(CPlayer p, CPosition pos, e :: Entity) ->
-  whenJust (move pos) $ \next ->
-    case (p, Map.lookup next enemies) of
-      (PAttack, _) -> pure ()
-      (_, Nothing) -> pure ()
-      (_, Just enemy) -> do
-        modify enemy (\(CActions actions) -> CActions (Hurt 1 : actions))
-        set e (CPlayer PAttack, Player.attack)
-
-playerMove :: Set.Set Position -> (Position -> Maybe Position) -> System' ()
-playerMove occupied move = cmapM_ $ \(CPlayer _, CPosition pos, e :: Entity) ->
-  whenJust (move pos) $ \next ->
-    when (Set.notMember next occupied) $ set e (CPlayer PIdle, Player.idle, CPosition next)
-
-finishAnimation :: forall c d. (Members World IO c, Get World IO c, Set World IO d) => d -> System' ()
-finishAnimation to = cmap $ \(_ :: c, CAnimation time duration) ->
-  eitherIf (const $ time >= duration) to
-
-playerAnimate :: System' ()
-playerAnimate = finishAnimation @CPlayer (CPlayer PIdle, Player.idle)
-
-playerCollide :: Set.Set Position -> System' ()
-playerCollide occupied = cmapM_ $ \(CPlayer _, CPosition pos, e :: Entity) ->
-  let directions = find (`Set.notMember` occupied) $ (+ pos) . dirToV2 <$> [North, East, South, West]
-   in when (Set.member pos occupied) . whenJust directions $ \destination ->
-        set e (CPosition destination)
-
-playerHurt :: System' ()
-playerHurt = cmapM $ \(CPlayer _, CStat Stat {hitpoints}, e :: Entity) -> do
-  damage <- consumeHurt e
-  pure $
-    eitherIf (const $ damage /= 0) (CPlayer PHurt, CStat Stat {hitpoints = hitpoints - fromIntegral damage})
-
-stepPlayer :: Set.Set Position -> Map.Map Position Entity -> System' ()
-stepPlayer occupied enemies =
-  cmapM_ $ \(CPlayer p, e :: Entity) -> do
-    offset <- consumeMove e
-    let next pos = maybeIf (/= pos) (pos + offset)
-    playerCollide occupied
-    playerHurt
-    playerAttack enemies next
-    playerMove occupied next
-
-stepAnimation :: Double -> System' ()
-stepAnimation dt = do
-  cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
-  zombieAnimate
-  vampireAnimate
-  playerAnimate
-
-enemiesDie :: System' ()
-enemiesDie = cmap $ \(CEnemy, CStat Stat {hitpoints}) ->
-  eitherIf (const $ hitpoints <= 0) (Not @(CEnemy, CAnimation, CZombie, CVampire, CPosition, CStat, CActions))
-
-enemiesHurt :: System' ()
-enemiesHurt = cmapM $ \(CEnemy, CStat Stat {hitpoints}, e :: Entity) -> do
-  damage <- consumeHurt e
-  pure (CStat Stat {hitpoints = hitpoints - fromIntegral damage})
-
-enemiesAttackMove :: forall c. Get World IO c => (Entity -> System' ()) -> Position -> Set.Set Position -> System' (Set.Set Position)
-enemiesAttackMove onAttack playerPosition = cfoldM $ \occupied (CEnemy, CPosition pos, _ :: c, e :: Entity) -> do
-  g <- lift newStdGen
-  let (direction, _) = random g
-      next = dirToV2 direction + pos
-  case (Set.member next occupied, playerPosition == next) of
-    (False, f) -> do
-      when f (onAttack e)
-      set e (CPosition next)
-      pure (Set.insert next . Set.delete pos $ occupied)
-    (True, _) -> pure occupied
-
-zombieAnimate :: System' ()
-zombieAnimate = finishAnimation @CZombie (CZombie ZIdle, Zombie.idle)
-
-vampireAnimate :: System' ()
-vampireAnimate = finishAnimation @CVampire (CVampire VIdle, Vampire.idle)
-
-addAction :: Entity -> Action -> System' ()
-addAction e action = modify e $ \(CActions actions) -> CActions (action : actions)
-
-stepEnemies :: Set.Set Position -> Bool -> System' ()
-stepEnemies occupied shouldUpdate =
-  when shouldUpdate . cmapM_ $ \(CPlayer _, CPosition playerPos, player :: Entity) -> do
-    let attackMove :: forall c. Get World IO c => (Entity -> System' ()) -> Set.Set Position -> System' (Set.Set Position)
-        attackMove f = enemiesAttackMove @c f playerPos
-        zombieAttackMove = attackMove @CZombie $ \zombie -> do
-          set zombie (CZombie ZAttack, Zombie.attack)
-          addAction player (Hurt 2)
-        vampireAttackMove = attackMove @CVampire $ \vampire -> do
-          set vampire (CVampire VAttack, Vampire.attack)
-          addAction player (Hurt 1)
-    vampireAttackMove occupied
-      >>= zombieAttackMove
-    enemiesHurt
-    enemiesDie
-    pure ()
-
-toActions :: [Event] -> [Action]
-toActions = mapMaybe toAction
-  where
-    toAction (InputMove d) = Just (Move d)
-    toAction _ = Nothing
-
-stepEvents :: [Event] -> System' ()
-stepEvents events = cmap $ \(CPlayer _, CActions actions) -> Just (CActions (toActions events ++ actions))
-
-step :: Env.Env -> Double -> [Event] -> System' World
-step _ dt actions = do
-  walls <- getEntities @CWall
-  obstacles <- getEntities @CObstacle
-  enemies <- getEntities @CEnemy
-  let occupied = foldl1 Set.union $ Map.keysSet <$> [walls, obstacles, enemies]
-      shouldUpdate = not . null $ actions
-  stepEvents actions
-  stepAnimation dt
-  stepPlayer occupied enemies
-  stepEnemies occupied shouldUpdate
-  ask
-  where
-    getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
-    getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
 
 run :: World -> IO ()
 run w = do
