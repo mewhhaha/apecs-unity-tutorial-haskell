@@ -377,19 +377,19 @@ stepEvents events = cmap $ \(CPlayer _, CActions actions) -> Just (CActions (toA
 
 step :: Env.Env -> Double -> [Event] -> System' World
 step _ dt actions = do
-  walls <- cfold (getPositions @CWall) mempty
-  obstacles <- cfold (getPositions @CObstacle) mempty
-  enemies <- cfold (getPositions @CEnemy) mempty
+  walls <- getEntities @CWall
+  obstacles <- getEntities @CObstacle
+  enemies <- getEntities @CEnemy
   let occupied = foldl1 Set.union $ Map.keysSet <$> [walls, obstacles, enemies]
-      shouldUpdate = (not . null $ actions)
+      shouldUpdate = not . null $ actions
   stepEvents actions
   stepAnimation dt
   stepPlayer occupied enemies
   stepEnemies occupied shouldUpdate
   ask
   where
-    getPositions :: forall c. (Members World IO c, Get World IO c) => Map.Map Position Entity -> (c, Entity, CPosition) -> Map.Map Position Entity
-    getPositions acc (_, e, CPosition pos) = Map.insert pos e acc
+    getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
+    getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
 
 run :: World -> IO ()
 run w = do
