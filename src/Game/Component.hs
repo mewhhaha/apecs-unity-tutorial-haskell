@@ -40,16 +40,11 @@ data Zombie = ZIdle | ZAttack
 data Vampire = VIdle | VAttack
   deriving (Enum, Bounded)
 
-data Action = Move Direction | Hurt Word
+data Action = Hurt Word | Attack | Movement (V2 Double)
+  deriving (Eq, Ord)
 
 data Prop = Drink | Apples | Exit
   deriving (Eq, Ord, Enum, Bounded)
-
-data MoveTo
-  = MoveTo
-      { from :: V2 Double,
-        to :: V2 Double
-      }
 
 instance Random Prop where
   randomR = defaultEnumRandomR
@@ -111,18 +106,14 @@ type CObstacle = Clip Obstacle
 
 type CProp = Clip Prop
 
-newtype CMoveTo = CMoveTo MoveTo
-
 data CIsRunning = Running | Paused | Stopped
   deriving (Eq)
 
 data CAnimation = CAnimation Double Double
 
-newtype CActionStream = CActionStream (NonEmpty [Action])
+newtype CActionStream = CActionStream (NonEmpty (Integer, [Action]))
 
 instance Component CPosition where type Storage CPosition = Apecs.Map CPosition
-
-instance Component CMoveTo where type Storage CMoveTo = Apecs.Map CMoveTo
 
 instance Component CStat where type Storage CStat = Apecs.Map CStat
 

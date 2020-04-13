@@ -32,8 +32,7 @@ makeWorld
     ''CVampire,
     ''CZombie,
     ''CActionStream,
-    ''CStat,
-    ''CMoveTo
+    ''CStat
   ]
 
 type System' a = System World a

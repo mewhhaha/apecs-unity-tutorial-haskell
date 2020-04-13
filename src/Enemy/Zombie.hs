@@ -12,4 +12,4 @@ idle = CAnimation 0 0.8
 attack = CAnimation 0 0.4
 
 new :: V2 Double -> System' ()
-new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 1}, CActionStream ([] :| []), CZombie ZIdle, idle, CPosition position)
+new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 1}, CActionStream ((0, []) :| []), CZombie ZIdle, idle, CPosition position)
