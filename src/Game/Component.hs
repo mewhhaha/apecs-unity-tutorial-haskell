@@ -24,8 +24,8 @@ defaultEnumRandomR (lo, hi) g = (toEnum i, g')
 defaultBoundedRandom :: (Random a, Bounded a, RandomGen g) => g -> (a, g)
 defaultBoundedRandom = randomR (minBound, maxBound)
 
-data Player = PIdle | PHurt | PAttack
-  deriving (Enum, Eq, Bounded)
+data Player = PAttack | PHurt | PIdle
+  deriving (Enum, Eq, Ord, Bounded)
 
 data Direction = North | East | South | West
   deriving (Eq, Enum, Ord, Bounded)
@@ -84,7 +84,7 @@ newtype CTime = CTime Integer
 
 newtype CPosition = CPosition Position
 
-newtype CPlayer = CPlayer Player
+newtype CPlayer = CPlayer (NonEmpty Player)
 
 data CGoal = CGoal
 

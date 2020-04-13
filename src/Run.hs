@@ -166,8 +166,6 @@ resources r = do
   zombieAttack <- loadASheet32x32 "zombie_attack.png"
   sfxFootstep1 <- loadAudio "scavengers_footstep1.aif"
   sfxFootstep2 <- loadAudio "scavengers_footstep1.aif"
-  SDL.Mixer.setVolume 20 sfxFootstep1
-  SDL.Mixer.setVolume 20 sfxFootstep2
   pure
     Env.Env
       { prop = prop,
@@ -235,13 +233,10 @@ sumHurt = fmap sum . peekActions sieveHurt
     sieveHurt _ = Nothing
 
 playerAttack :: Map.Map Position Entity -> Position -> System' ()
-playerAttack enemies next = cmapM_ $ \(CPlayer p, CPosition pos, player :: Entity) ->
-  case (p, Map.lookup next enemies) of
-    (PAttack, _) -> pure ()
-    (_, Nothing) -> pure ()
-    (_, Just enemy) -> do
-      send enemy (Hurt 1)
-      send player Attack
+playerAttack enemies next = cmapM_ $ \(_ :: CPlayer, CPosition pos, player :: Entity) ->
+  whenJust (Map.lookup next enemies) $ \enemy -> do
+    send enemy (Hurt 1)
+    send player Attack
 
 playerMove :: Set.Set Position -> Position -> System' ()
 playerMove occupied next = cmapM_ $ \(CPlayer _, CPosition pos, player :: Entity) ->
@@ -252,8 +247,12 @@ finishAnimation to = cmap $ \(_ :: c, CAnimation time duration) ->
   eitherIf (const $ time >= duration) to
 
 stepAnimation :: Double -> System' ()
-stepAnimation dt =
+stepAnimation dt = do
   cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
+  cmap $
+    \(CPlayer ps, CAnimation time duration) -> case (time >= duration, snd (NonEmpty.uncons ps)) of
+      (True, Just rest) -> Right (CPlayer rest, Player.animate . NonEmpty.head $ rest)
+      _ -> Left ()
 
 killEnemies :: System' ()
 killEnemies = cmap $ \(CEnemy, CStat Stat {hitpoints}) ->
@@ -333,11 +332,17 @@ hurtPlayer :: System' ()
 hurtPlayer = hurtLatest @CPlayer
 
 statePlayer :: System' ()
-statePlayer = peekLatest @CPlayer $ \latest -> case listToMaybe . sort $ latest of
-  Just (Hurt _) -> Right (CPlayer PHurt, Player.hurt)
-  Just Attack -> Right (CPlayer PAttack, Player.attack)
-  Just (Movement _) -> Right (CPlayer PIdle, Player.idle)
-  _ -> Left ()
+statePlayer = peekLatest @CPlayer $ \latest ->
+  case Set.elems . Set.fromList $ mapMaybe toState latest of
+    [] -> Left ()
+    [PAttack] -> toComp PAttack [PIdle]
+    (PHurt : _) -> toComp PHurt []
+    (a : as) -> toComp a as
+  where
+    toComp a as = Right (CPlayer (a :| as), Player.animate a)
+    toState (Hurt _) = Just PHurt
+    toState Attack = Just PAttack
+    toState (Movement _) = Just PIdle
 
 stateZombie :: System' ()
 stateZombie = peekLatest @CZombie $ \latest -> case listToMaybe . sort $ latest of
@@ -405,6 +410,7 @@ draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
     playFootstep Env.Player {sfxFootstep} = do
       g <- lift newStdGen
       let randomIndex = fst (randomR (0, length sfxFootstep - 1) g)
+      SDL.Mixer.setVolume 20 (0 :: SDL.Mixer.Channel)
       SDL.Mixer.playOn 0 SDL.Mixer.Once (sfxFootstep !! randomIndex)
       pure ()
     toScreen :: Integral a => V2 Double -> V2 a
@@ -423,7 +429,7 @@ draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
       \pos time dur (CPlayer p) ->
         let render' :: forall n. (KnownNat n, 1 <= n) => ASheet n -> IO ()
             render' = render . (pos,) . linear time dur
-         in case p of
+         in case NonEmpty.head p of
               PIdle -> render' idle
               PHurt -> render' hurt
               PAttack -> render' attack
