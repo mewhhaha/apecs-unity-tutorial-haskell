@@ -68,7 +68,7 @@ play ::
 play world createEnv handleEvents stepSystem drawSystem =
   Internal.withSDL
     . Internal.withSDLImage
-    . Internal.withAudio SDL.Mixer.defaultAudio 256
+    . SDL.Mixer.withAudio SDL.Mixer.defaultAudio 256
     $ do
       Internal.setHintQuality
       Internal.withWindow "My game" windowSize $ \w ->

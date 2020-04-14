@@ -41,6 +41,10 @@ import Apecs.SDL (play, renderSprite)
 import Apecs.SDL.Internal (ASheet, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
 import Control.Arrow
 import Control.Monad (forM_, void, when)
+import qualified Control.Monad.State.Strict as State
+import qualified Creature.Player as Player
+import qualified Creature.Vampire as Vampire
+import qualified Creature.Zombie as Zombie
 import Data.Either
 import Data.Function
 import Data.List
@@ -49,21 +53,16 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import Data.Maybe
 import qualified Data.Set as Set
-import qualified Enemy.Vampire as Vampire
-import qualified Enemy.Zombie as Zombie
 import qualified Env
-import Event (isKeyDown)
+import Event (Event (..), events, isKeyDown)
 import GHC.TypeNats
 import Game.Component
 import Game.World (System', World)
 import Linear (V2 (..))
-import qualified Player.Player as Player
 import qualified SDL
 import qualified SDL.Mixer
 import System.FilePath.Posix ((</>))
 import System.Random
-
-data Event = InputMove Direction | InputQuit
 
 toTime dt = floor (dt * 10000)
 
@@ -95,120 +94,81 @@ eitherIf f a = if f a then Right a else Left ()
 maybeIf :: (a -> Bool) -> a -> Maybe a
 maybeIf f a = if f a then Just a else Nothing
 
-spread :: RandomGen r => [V2 Double] -> Int -> r -> [V2 Double]
-spread positions starts g = Set.toList . Set.fromList . concat $ start <$> gs
+spread :: RandomGen r => Int -> r -> State.State [V2 Double] [V2 Double]
+spread starts g = do
+  positions <- State.get
+  return (Set.toList . Set.fromList . concat $ start positions <$> gs)
   where
     decreaseChance = 0.1
     initialChance = 0.4
-    ps = Set.fromList positions
     gs = take starts $ iterate (snd . split) g
-    randPos :: RandomGen r => r -> Set.Set (V2 Double) -> (V2 Double, r)
-    randPos g xs = let (n, g') = randomR (0, Set.size xs - 1) g in (Set.elemAt n xs, g')
-    expand :: RandomGen r => r -> Double -> V2 Double -> [V2 Double]
-    expand g chance n = n : concat (expand (snd . split $ g) (chance - decreaseChance) <$> neighbours)
+    start :: RandomGen r => [V2 Double] -> r -> [V2 Double]
+    start positions g = expand g' initialChance n
       where
-        neighbours =
-          catMaybes
-            . zipWith (\c p -> if c < chance then Just p else Nothing) (randomRs (0.0, 1.0) g)
-            . filter (`Set.member` ps)
-            $ (n +) <$> [V2 0 (-1), V2 0 1, V2 1 0, V2 (-1) 0]
-    start :: RandomGen r => r -> [V2 Double]
-    start g = expand g' initialChance n
-      where
+        ps = Set.fromList positions
         (n, g') = randPos g ps
+        randPos :: RandomGen r => r -> Set.Set (V2 Double) -> (V2 Double, r)
+        randPos g xs = let (n, g') = randomR (0, Set.size xs - 1) g in (Set.elemAt n xs, g')
+        expand :: RandomGen r => r -> Double -> V2 Double -> [V2 Double]
+        expand g chance n = n : concat (expand (snd . split $ g) (chance - decreaseChance) <$> neighbours)
+          where
+            neighbours =
+              catMaybes
+                . zipWith (\c p -> if c < chance then Just p else Nothing) (randomRs (0.0, 1.0) g)
+                . filter (`Set.member` ps)
+                $ (n +) <$> [V2 0 (-1), V2 0 1, V2 1 0, V2 (-1) 0]
 
 initialize :: System' ()
 initialize = do
-  lift $ setStdGen (mkStdGen 0)
+  lift $ setStdGen (mkStdGen 1)
   g <- lift newStdGen
   let shrink n = (!! n) . iterate (tail . init)
       hedges = [V2 x y | x <- xs, y <- [head ys, last ys]]
       vedges = [V2 x y | x <- [head xs, last xs], y <- shrink 1 ys]
       ground = [V2 x y | x <- shrink 1 xs, y <- shrink 1 ys]
       spawnArea = [V2 x y | x <- shrink 2 xs, y <- shrink 2 ys]
-      (zombies, rest) = pick g 5 spawnArea
-      (vampires, rest') = pick g 3 rest
-      obstacles = spread rest' 10 g
+      [zombies, vampires, sodas, fruit, obstacles] =
+        flip State.evalState spawnArea $
+          sequence [pick g 5, pick g 3, pick g 3, pick g 3, spread 10 g]
   newEnumsAt (randoms @Ground g) ground
   newEnumsAt (randoms @Wall g) (hedges ++ vedges)
   newEnumsAt (randoms @Obstacle g) obstacles
   sequence_ $ Zombie.new <$> zombies
   sequence_ $ Vampire.new <$> vampires
   Player.new (V2 1 (last ys - 1))
-  newEntity (CGoal, CPosition (V2 (last xs - 1) 1), Clip Exit)
-  pure ()
+  let props =
+        (Exit, V2 (last xs - 1) 1)
+          : zip (repeat Fruit) fruit
+          ++ zip (repeat Soda) sodas
+  newProps props
   where
+    newProps :: [(Prop, Position)] -> System' ()
+    newProps = mapM_ go
+      where
+        go :: (Prop, Position) -> System' ()
+        go (p, pos) =
+          let new :: forall c. (Set World IO c) => c -> System' ()
+              new c = void $ newEntity (c, CPosition pos, Clip p)
+           in case p of
+                Exit -> new CGoal
+                Fruit -> new CFruit
+                Soda -> new CSoda
     newEnumsAt :: (Set World IO (Clip a), Get World IO EntityCounter) => [a] -> [Position] -> System' ()
     newEnumsAt es ps = sequence_ $ newEntity . (Clip *** CPosition) <$> zip es ps
     ends :: [Double] -> (Int, Int)
     ends l = (floor $ head l, floor $ last l)
     shuffle :: RandomGen r => r -> [a] -> [a]
     shuffle r = fmap snd . sortBy (compare `on` fst) . zip (randoms @Int r)
-    pick :: RandomGen r => r -> Int -> [a] -> ([a], [a])
-    pick r n xs = splitAt n (shuffle r xs)
+    pick :: RandomGen r => r -> Int -> State.State [a] [a]
+    pick r n = do
+      state <- State.get
+      let (picked, rest) = splitAt n (shuffle r state)
+      State.put rest
+      return picked
     xs :: [Double]
     xs = [0 .. 19]
     ys :: [Double]
     ys = [0 .. 14]
-
-resources :: SDL.Renderer -> IO Env.Env
-resources r = do
-  prop <- loadSheet32x32 "props.png"
-  ground <- loadSheet32x32 "ground.png"
-  obstacle <- loadSheet32x32 "obstacles.png"
-  wall <- loadSheet32x32 "wall.png"
-  playerAttack <- loadASheet32x32 "player_attack.png"
-  playerIdle <- loadASheet32x32 "player_idle.png"
-  playerHurt <- loadASheet32x32 "player_hurt.png"
-  vampireIdle <- loadASheet32x32 "vampire_idle.png"
-  vampireAttack <- loadASheet32x32 "vampire_attack.png"
-  zombieIdle <- loadASheet32x32 "zombie_idle.png"
-  zombieAttack <- loadASheet32x32 "zombie_attack.png"
-  sfxFootstep1 <- loadAudio "scavengers_footstep1.aif"
-  sfxFootstep2 <- loadAudio "scavengers_footstep1.aif"
-  pure
-    Env.Env
-      { prop = prop,
-        ground = ground,
-        obstacle = obstacle,
-        wall = wall,
-        player =
-          Env.Player
-            { attack = playerAttack,
-              idle = playerIdle,
-              hurt = playerHurt,
-              sfxFootstep = [sfxFootstep1, sfxFootstep2]
-            },
-        vampire =
-          Env.Vampire
-            { attack = vampireAttack,
-              idle = vampireIdle
-            },
-        zombie =
-          Env.Zombie
-            { attack = zombieAttack,
-              idle = zombieIdle
-            }
-      }
-  where
-    loadAudio :: FilePath -> IO SDL.Mixer.Chunk
-    loadAudio f = SDL.Mixer.load ("resources" </> "audio" </> f)
-    loadImage :: FilePath -> IO Texture
-    loadImage f = loadTexture r ("resources" </> "sprites" </> f)
-    loadSheet32x32 :: forall a. (Enum a, Ord a, Bounded a) => FilePath -> IO (Sheet a)
-    loadSheet32x32 f = (`mkSheet` mkClips (32, 32)) <$> loadImage f
-    loadASheet32x32 :: forall n. (KnownNat n, 1 <= n) => FilePath -> IO (ASheet n)
-    loadASheet32x32 f = (`mkASheet` (32, 32)) <$> loadImage f
-
-movement :: Either Event SDL.Event -> Either Event SDL.Event
-movement e = do
-  payload <- SDL.eventPayload <$> e
-  let pressed c r = if isKeyDown c payload then Left r else pure ()
-  pressed SDL.ScancodeRight (InputMove East)
-  pressed SDL.ScancodeLeft (InputMove West)
-  pressed SDL.ScancodeUp (InputMove North)
-  pressed SDL.ScancodeDown (InputMove South)
-  e
 
 dirToV2 :: Direction -> Position
 dirToV2 = \case
@@ -292,9 +252,6 @@ evalEvents events enemies occupied =
         dir (InputMove d) = Just (dirToV2 d)
         dir _ = Nothing
 
-events :: Env.Env -> [SDL.Event] -> [Event]
-events _ es = lefts $ movement . Right <$> es
-
 peekLatest :: forall c d. (Members World IO c, Get World IO c, Set World IO d) => ([Action] -> d) -> System' ()
 peekLatest sys = cmap $ \(_ :: c, CActionStream stream) ->
   let latest = snd . NonEmpty.head $ stream
@@ -356,6 +313,17 @@ stateVampire = peekLatest @CVampire $ \latest -> case listToMaybe . sort $ lates
   Just (Movement _) -> Right (CVampire VIdle, Vampire.idle)
   _ -> Left ()
 
+evalItems :: Map.Map Position Entity -> System' ()
+evalItems pickers = do
+  pick @CFruit 1
+  pick @CSoda 1
+  where
+    pick :: forall c. (Members World IO c, Get World IO c) => Word -> System' ()
+    pick i = cmapM_ $ \(_ :: c, CPosition pos, self :: Entity) ->
+      whenJust (Map.lookup pos pickers) $ \picker -> do
+        send picker (Recover i)
+        send self Die
+
 step :: Env.Env -> Double -> [Event] -> System' World
 step _ dt actions = do
   tick dt
@@ -371,6 +339,7 @@ step _ dt actions = do
     killEnemies
     movePlayer
     player <- getEntities @CPlayer
+    evalItems player
     evalEnemies player occupied
     hurtPlayer
     moveEnemies
@@ -386,16 +355,16 @@ isMovement :: Action -> Bool
 isMovement (Movement _) = True
 isMovement _ = False
 
-whenMove :: [Action] -> System' () -> System' ()
-whenMove as op = if has then op else pure ()
-  where
-    has = any isMovement as
+isAttack :: Action -> Bool
+isAttack Attack = True
+isAttack _ = False
 
 draw :: Env.Env -> SDL.Renderer -> System' ()
 draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
-  cmapM_ $ \(_ :: CPlayer, CActionStream stream) ->
+  cmapM_ $ \(_ :: CPlayer, CActionStream stream) -> do
     let latest = snd . NonEmpty.head $ stream
-     in whenMove latest (playFootstep player)
+    when (any isMovement latest) (playFootstep player)
+    when (any isAttack latest) (playChop player)
   sequence_
     [ drawSheet ground,
       drawSheet wall,
@@ -406,13 +375,16 @@ draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
       drawZombie zombie
     ]
   where
-    playFootstep :: Env.Player -> System' ()
-    playFootstep Env.Player {sfxFootstep} = do
+    playPlayerSound :: [SDL.Mixer.Chunk] -> System' ()
+    playPlayerSound chunks = do
       g <- lift newStdGen
-      let randomIndex = fst (randomR (0, length sfxFootstep - 1) g)
+      let randomIndex = fst (randomR (0, length chunks - 1) g)
       SDL.Mixer.setVolume 20 (0 :: SDL.Mixer.Channel)
-      SDL.Mixer.playOn 0 SDL.Mixer.Once (sfxFootstep !! randomIndex)
-      pure ()
+      void $ SDL.Mixer.playOn 0 SDL.Mixer.Once (chunks !! randomIndex)
+    playFootstep :: Env.Player -> System' ()
+    playFootstep Env.Player {sfxFootstep} = playPlayerSound sfxFootstep
+    playChop :: Env.Player -> System' ()
+    playChop Env.Player {sfxChop} = playPlayerSound sfxChop
     toScreen :: Integral a => V2 Double -> V2 a
     toScreen p = round . (* 32) <$> p
     render :: forall s. (Sprite s) => (V2 Double, s) -> IO ()
@@ -453,4 +425,4 @@ draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
 run :: World -> IO ()
 run w = do
   w' <- runWith w (initialize >> ask)
-  play w' resources events step draw
+  play w' Env.resources events step draw

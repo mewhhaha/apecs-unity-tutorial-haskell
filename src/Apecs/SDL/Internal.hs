@@ -140,14 +140,6 @@ withRenderer w op = do
   void $ op r
   SDL.destroyRenderer r
 
-withAudio :: (MonadIO m) => SDL.Mixer.Audio -> SDL.Mixer.ChunkSize -> m () -> m ()
-withAudio audio chunkSize op = do
-  SDL.Mixer.initialize []
-  SDL.Mixer.openAudio audio chunkSize
-  op
-  SDL.Mixer.closeAudio
-  SDL.Mixer.quit
-
 rendererConfig :: SDL.RendererConfig
 rendererConfig =
   SDL.RendererConfig

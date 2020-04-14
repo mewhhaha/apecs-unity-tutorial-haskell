@@ -10,6 +10,7 @@ library:
     - astar
     - random
     - extra
+    - mtl
     - filepath
     - template-haskell
     - typelits-witnesses
