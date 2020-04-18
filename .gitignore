@@ -1,4 +1,5 @@
 .stack-work/
-mall.cabal
+game.cabal
+bondle
 *~
 stack.yaml.lock
