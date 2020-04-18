@@ -12,6 +12,7 @@ library:
     - extra
     - mtl
     - filepath
+    - bytestring
     - template-haskell
     - typelits-witnesses
     - text

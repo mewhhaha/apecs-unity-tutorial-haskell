@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 66065bdab63b2eb528d7cec7a894934669aa43bed2ad025b0bde2b6f21ecaad3
+-- hash: 1a5e9480c34b7fef28fc2f240d7fab978083031f9916408a11fc1ada08d4a098
 
 name:           game
 version:        0.1.0.0
@@ -27,7 +27,6 @@ library
   exposed-modules:
       Apecs.SDL
       Apecs.SDL.Internal
-      Creature.Common
       Creature.Player
       Creature.Vampire
       Creature.Zombie
@@ -44,6 +43,7 @@ library
       apecs
     , astar
     , base >=4.7 && <5
+    , bytestring
     , containers
     , extra
     , filepath

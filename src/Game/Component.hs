@@ -40,7 +40,7 @@ data Zombie = ZIdle | ZAttack
 data Vampire = VIdle | VAttack
   deriving (Enum, Bounded)
 
-data Action = Hurt Word | Attack | Movement (V2 Double) | Recover Word | Die
+data Action = Hurt Word | Attack | Movement (V2 Double) | Recover Word
   deriving (Eq, Ord)
 
 data Prop = Soda | Fruit | Exit
@@ -57,19 +57,21 @@ instance Random Ground where
   randomR = defaultEnumRandomR
   random = defaultBoundedRandom
 
-data Obstacle = O1 | O2 | O3 | O4 | O5 | O6 | O7
+data Wall = W1 | W2 | W3 | W4 | W5 | W6 | W7
+  deriving (Eq, Ord, Enum, Bounded)
+
+instance Random Wall where
+  randomR = defaultEnumRandomR
+  random = defaultBoundedRandom
+
+data Obstacle = O1 | O2 | O3 | O4 | O5 | O6 | O7 | O8 | O9 | O10 | O11
   deriving (Eq, Ord, Enum, Bounded)
 
 instance Random Obstacle where
   randomR = defaultEnumRandomR
   random = defaultBoundedRandom
 
-data Wall = W1 | W2 | W3 | W4 | W5 | W6 | W7 | W8 | W9 | W10 | W11
-  deriving (Eq, Ord, Enum, Bounded)
-
-instance Random Wall where
-  randomR = defaultEnumRandomR
-  random = defaultBoundedRandom
+data CWin = CWin
 
 type Position = V2 Double
 
@@ -108,7 +110,11 @@ type CProp = Clip Prop
 
 data CFruit = CFruit
 
+data CDead = CDead
+
 data CSoda = CSoda
+
+newtype CLevel = CLevel Word
 
 data CIsRunning = Running | Paused | Stopped
   deriving (Eq)
@@ -118,6 +124,8 @@ data CAnimation = CAnimation Double Double
 newtype CActionStream = CActionStream (NonEmpty (Integer, [Action]))
 
 instance Component CPosition where type Storage CPosition = Apecs.Map CPosition
+
+instance Component CDead where type Storage CDead = Apecs.Map CDead
 
 instance Component CSoda where type Storage CSoda = Apecs.Map CSoda
 
@@ -151,6 +159,12 @@ instance Semigroup CTime where (CTime t1) <> (CTime t2) = CTime (t1 + t2)
 
 instance Monoid CTime where mempty = CTime 0
 
+instance Component CLevel where type Storage CLevel = Apecs.Global CLevel
+
+instance Semigroup CLevel where (CLevel t1) <> (CLevel t2) = CLevel (t1 + t2)
+
+instance Monoid CLevel where mempty = CLevel 0
+
 instance Component CIsRunning where type Storage CIsRunning = Apecs.Global CIsRunning
 
 instance Semigroup CIsRunning where
@@ -159,5 +173,7 @@ instance Semigroup CIsRunning where
 instance Monoid CIsRunning where mempty = Stopped
 
 instance Component CPlayer where type Storage CPlayer = Unique CPlayer
+
+instance Component CWin where type Storage CWin = Unique CWin
 
 instance Component CGoal where type Storage CGoal = Unique CGoal

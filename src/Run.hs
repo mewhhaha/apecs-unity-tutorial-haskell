@@ -40,11 +40,12 @@ import Apecs
 import Apecs.SDL (play, renderSprite)
 import Apecs.SDL.Internal (ASheet, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
 import Control.Arrow
-import Control.Monad (forM_, void, when)
+import Control.Monad (forM_, unless, void, when)
 import qualified Control.Monad.State.Strict as State
 import qualified Creature.Player as Player
 import qualified Creature.Vampire as Vampire
 import qualified Creature.Zombie as Zombie
+import qualified Data.ByteString as ByteString
 import Data.Either
 import Data.Function
 import Data.List
@@ -57,7 +58,7 @@ import qualified Env
 import Event (Event (..), events, isKeyDown)
 import GHC.TypeNats
 import Game.Component
-import Game.World (System', World)
+import Game.World (All, System', World, initWorld)
 import Linear (V2 (..))
 import qualified SDL
 import qualified SDL.Mixer
@@ -74,7 +75,7 @@ sends e actions = modify e $ \(CActionStream ((t, as) :| rest)) -> CActionStream
 
 tick :: Double -> System' ()
 tick dt = do
-  modify global $ \(CTime time) -> (CTime (time + toTime dt))
+  modify global $ \(CTime time) -> CTime (time + toTime dt)
   (CTime time) <- get global
   cmap $ \(CActionStream stream@(as :| rest)) ->
     let next = (time, [])
@@ -118,9 +119,10 @@ spread starts g = do
                 . filter (`Set.member` ps)
                 $ (n +) <$> [V2 0 (-1), V2 0 1, V2 1 0, V2 (-1) 0]
 
-initialize :: System' ()
-initialize = do
-  lift $ setStdGen (mkStdGen 1)
+initialize :: Word -> System' ()
+initialize level = do
+  set global (CLevel level)
+  lift $ setStdGen (mkStdGen (fromIntegral level))
   g <- lift newStdGen
   let shrink n = (!! n) . iterate (tail . init)
       hedges = [V2 x y | x <- xs, y <- [head ys, last ys]]
@@ -148,7 +150,7 @@ initialize = do
         go :: (Prop, Position) -> System' ()
         go (p, pos) =
           let new :: forall c. (Set World IO c) => c -> System' ()
-              new c = void $ newEntity (c, CPosition pos, Clip p)
+              new c = void $ newEntity (c, CPosition pos, Clip p, CActionStream ((0, []) :| []))
            in case p of
                 Exit -> new CGoal
                 Fruit -> new CFruit
@@ -215,8 +217,8 @@ stepAnimation dt = do
       _ -> Left ()
 
 killEnemies :: System' ()
-killEnemies = cmap $ \(CEnemy, CStat Stat {hitpoints}) ->
-  eitherIf (const $ hitpoints <= 0) (Not @(CEnemy, CAnimation, CZombie, CVampire, CPosition, CStat, CActionStream))
+killEnemies = cmapM $ \(CEnemy, CStat Stat {hitpoints}, enemy :: Entity) ->
+  pure $ eitherIf (const $ hitpoints <= 0) CDead
 
 evalEnemies :: Map.Map Position Entity -> Set.Set Position -> System' ()
 evalEnemies targets =
@@ -235,15 +237,16 @@ evalEnemies targets =
         send enemy (Movement next)
         pure (Set.insert next . Set.delete pos $ occupied)
 
-evalEvents :: [Event] -> Map.Map Position Entity -> Set.Set Position -> System' ()
-evalEvents events enemies occupied =
+evalEvents :: [Event] -> Map.Map Position Entity -> Set.Set Position -> Set.Set Position -> System' ()
+evalEvents events enemies goal occupied =
   cmapM_ $ \(CPlayer _, CPosition prev, player :: Entity) ->
     whenJust (maybeIf (/= prev) $ move events prev) $ \next ->
-      case (Set.member next occupied, Map.lookup next enemies) of
-        (_, Just enemy) -> do
+      case (Set.member next occupied, Map.lookup next enemies, Set.member next goal) of
+        (_, _, True) -> void $ newEntity CWin
+        (_, Just enemy, _) -> do
           send enemy (Hurt 1)
           send player Attack
-        (True, _) -> pure ()
+        (True, _, _) -> pure ()
         _ -> send player (Movement next)
   where
     move :: [Event] -> Position -> Position
@@ -291,15 +294,15 @@ hurtPlayer = hurtLatest @CPlayer
 statePlayer :: System' ()
 statePlayer = peekLatest @CPlayer $ \latest ->
   case Set.elems . Set.fromList $ mapMaybe toState latest of
-    [] -> Left ()
     [PAttack] -> toComp PAttack [PIdle]
     (PHurt : _) -> toComp PHurt []
     (a : as) -> toComp a as
+    _ -> Left ()
   where
     toComp a as = Right (CPlayer (a :| as), Player.animate a)
     toState (Hurt _) = Just PHurt
     toState Attack = Just PAttack
-    toState (Movement _) = Just PIdle
+    toState _ = Just PIdle
 
 stateZombie :: System' ()
 stateZombie = peekLatest @CZombie $ \latest -> case listToMaybe . sort $ latest of
@@ -316,16 +319,22 @@ stateVampire = peekLatest @CVampire $ \latest -> case listToMaybe . sort $ lates
 evalItems :: Map.Map Position Entity -> System' ()
 evalItems pickers = do
   pick @CFruit 1
-  pick @CSoda 1
+  pick @CSoda 2
   where
     pick :: forall c. (Members World IO c, Get World IO c) => Word -> System' ()
-    pick i = cmapM_ $ \(_ :: c, CPosition pos, self :: Entity) ->
-      whenJust (Map.lookup pos pickers) $ \picker -> do
-        send picker (Recover i)
-        send self Die
+    pick i = cmapM $ \(_ :: c, CPosition pos, self :: Entity) ->
+      case Map.lookup pos pickers of
+        Nothing -> pure $ Left ()
+        Just picker -> do
+          send picker (Recover i)
+          pure $ Right CDead
+
+removeDead :: System' ()
+removeDead = cmap $ \CDead -> Not @All
 
 step :: Env.Env -> Double -> [Event] -> System' World
 step _ dt actions = do
+  removeDead
   tick dt
   stepAnimation dt
   let shouldUpdate = not . null $ actions
@@ -333,8 +342,9 @@ step _ dt actions = do
     walls <- getEntities @CWall
     obstacles <- getEntities @CObstacle
     enemies <- getEntities @CEnemy
+    goal <- Map.keysSet <$> getEntities @CGoal
     let occupied = foldl1 Set.union $ Map.keysSet <$> [walls, obstacles, enemies]
-    evalEvents actions enemies occupied
+    evalEvents actions enemies goal occupied
     hurtEnemies
     killEnemies
     movePlayer
@@ -346,7 +356,14 @@ step _ dt actions = do
     statePlayer
     stateZombie
     stateVampire
-  ask
+  win <- cfold (\_ CWin -> True) False
+  if not win
+    then ask
+    else do
+      (CLevel level) <- get global
+      lift $ do
+        w <- initWorld
+        runWith w (initialize (level + 1) >> ask)
   where
     getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
     getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
@@ -359,12 +376,29 @@ isAttack :: Action -> Bool
 isAttack Attack = True
 isAttack _ = False
 
+whenHas :: forall c. (Members World IO c, Get World IO c) => System' () -> System' ()
+whenHas op = do
+  has <- cfold (\prev (_ :: c) -> prev || True) False
+  when has op
+
 draw :: Env.Env -> SDL.Renderer -> System' ()
-draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
+draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, prop, misc} r = do
+  isMusicPlay <- SDL.Mixer.playingMusic
+  unless isMusicPlay (playMusic music)
   cmapM_ $ \(_ :: CPlayer, CActionStream stream) -> do
     let latest = snd . NonEmpty.head $ stream
     when (any isMovement latest) (playFootstep player)
     when (any isAttack latest) (playChop player)
+  whenHas @(CSoda, CDead) (playSoda misc)
+  whenHas @(CFruit, CDead) (playFruit misc)
+  whenHas @(CEnemy, CDead) (playEnemyDie enemy)
+  enemyAttack <-
+    cfold
+      ( \prev (CEnemy, CActionStream stream) ->
+          let latest = snd . NonEmpty.head $ stream in prev || (any isAttack latest)
+      )
+      False
+  when enemyAttack (playEnemyAttack enemy)
   sequence_
     [ drawSheet ground,
       drawSheet wall,
@@ -375,16 +409,35 @@ draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
       drawZombie zombie
     ]
   where
-    playPlayerSound :: [SDL.Mixer.Chunk] -> System' ()
-    playPlayerSound chunks = do
+    playMusic :: ByteString.ByteString -> System' ()
+    playMusic music = lift $ do
+      SDL.Mixer.setMusicVolume 20
+      decoded <- SDL.Mixer.decode music
+      SDL.Mixer.playMusic SDL.Mixer.Once decoded
+    playSound :: SDL.Mixer.Channel -> [SDL.Mixer.Chunk] -> System' ()
+    playSound ch chunks = do
       g <- lift newStdGen
       let randomIndex = fst (randomR (0, length chunks - 1) g)
       SDL.Mixer.setVolume 20 (0 :: SDL.Mixer.Channel)
-      void $ SDL.Mixer.playOn 0 SDL.Mixer.Once (chunks !! randomIndex)
+      void $ SDL.Mixer.playOn ch SDL.Mixer.Once (chunks !! randomIndex)
+    playPlayerSound :: [SDL.Mixer.Chunk] -> System' ()
+    playPlayerSound = playSound 0
+    playMiscSound :: [SDL.Mixer.Chunk] -> System' ()
+    playMiscSound = playSound 1
+    playEnemySound :: [SDL.Mixer.Chunk] -> System' ()
+    playEnemySound = playSound 2
     playFootstep :: Env.Player -> System' ()
     playFootstep Env.Player {sfxFootstep} = playPlayerSound sfxFootstep
     playChop :: Env.Player -> System' ()
     playChop Env.Player {sfxChop} = playPlayerSound sfxChop
+    playEnemyAttack :: Env.Enemy -> System' ()
+    playEnemyAttack Env.Enemy {sfxAttack} = playEnemySound [sfxAttack]
+    playEnemyDie :: Env.Enemy -> System' ()
+    playEnemyDie Env.Enemy {sfxDie} = playMiscSound [sfxDie]
+    playSoda :: Env.Misc -> System' ()
+    playSoda Env.Misc {sfxSoda} = playMiscSound sfxSoda
+    playFruit :: Env.Misc -> System' ()
+    playFruit Env.Misc {sfxFruit} = playMiscSound sfxFruit
     toScreen :: Integral a => V2 Double -> V2 a
     toScreen p = round . (* 32) <$> p
     render :: forall s. (Sprite s) => (V2 Double, s) -> IO ()
@@ -392,10 +445,10 @@ draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
     cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> (V2 Double, s)) -> System' ()
     cdraw f = cfoldM (\acc c -> pure (acc >> render (f c))) mempty >>= lift
     drawSheet :: forall c. (Members World IO (Clip c), Get World IO (Clip c), Ord c) => Sheet c -> System' ()
-    drawSheet s = cdraw $ \(Clip c, CPosition pos) ->
+    drawSheet s = cdraw $ \(Clip c, CPosition pos, _ :: Not CDead) ->
       (pos, (s {clip = Just c}))
     drawAnimation :: forall c. (Members World IO c, Get World IO c) => (V2 Double -> Double -> Double -> c -> IO ()) -> System' ()
-    drawAnimation f = cfoldM (\acc (c :: c, CPosition pos, CAnimation time dur) -> pure (acc >> f pos time dur c)) mempty >>= lift
+    drawAnimation f = cfoldM (\acc (c :: c, CPosition pos, _ :: Not CDead, CAnimation time dur) -> pure (acc >> f pos time dur c)) mempty >>= lift
     drawPlayer :: Env.Player -> System' ()
     drawPlayer Env.Player {idle, hurt, attack} = drawAnimation @CPlayer $
       \pos time dur (CPlayer p) ->
@@ -424,5 +477,5 @@ draw Env.Env {player, vampire, zombie, ground, wall, obstacle, prop} r = do
 
 run :: World -> IO ()
 run w = do
-  w' <- runWith w (initialize >> ask)
+  w' <- runWith w (initialize 0 >> ask)
   play w' Env.resources events step draw

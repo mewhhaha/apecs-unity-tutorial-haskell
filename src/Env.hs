@@ -7,6 +7,8 @@
 module Env where
 
 import Apecs.SDL.Internal (ASheet, Sheet, Texture, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
+import Control.Monad
+import qualified Data.ByteString as ByteString
 import qualified Data.Map as Map
 import Foreign.C.Types
 import GHC.Natural
@@ -38,12 +40,16 @@ data Player
         sfxDie :: SDL.Mixer.Chunk
       }
 
-data Misc = Misc {sfxSoda :: [SDL.Mixer.Chunk], sfxFruit :: [SDL.Mixer.Chunk], sfxEnemy :: [SDL.Mixer.Chunk]}
+data Misc = Misc {sfxSoda :: [SDL.Mixer.Chunk], sfxFruit :: [SDL.Mixer.Chunk]}
+
+data Enemy = Enemy {sfxAttack :: SDL.Mixer.Chunk, sfxDie :: SDL.Mixer.Chunk}
 
 data Env
   = Env
       { misc :: Misc,
         zombie :: Zombie,
+        music :: ByteString.ByteString,
+        enemy :: Enemy,
         vampire :: Vampire,
         player :: Player,
         prop :: Sheet C.Prop,
@@ -56,8 +62,8 @@ resources :: SDL.Renderer -> IO Env.Env
 resources r = do
   prop <- loadSheet32x32 "props.png"
   ground <- loadSheet32x32 "ground.png"
-  obstacle <- loadSheet32x32 "obstacles.png"
-  wall <- loadSheet32x32 "wall.png"
+  wall <- loadSheet32x32 "obstacles.png"
+  obstacle <- loadSheet32x32 "wall.png"
   playerAttack <- loadASheet32x32 "player_attack.png"
   playerIdle <- loadASheet32x32 "player_idle.png"
   playerHurt <- loadASheet32x32 "player_hurt.png"
@@ -69,23 +75,23 @@ resources r = do
   sfxSoda <- loadAudios ["scavengers_soda1.ogg", "scavengers_soda2.ogg"]
   sfxFruit <- loadAudios ["scavengers_fruit1.aif", "scavengers_fruit2.aif"]
   sfxChop <- loadAudios ["scavengers_chop1.ogg", "scavengers_chop2.ogg"]
-  sfxEnemy <- loadAudios ["scavengers_enemy1.aif", "scavengers_enemy2.aif"]
-  sfxMusic <- loadAudio "scavengers_music.ogg"
+  sfxEnemyAttack <- loadAudio "scavengers_enemy1.aif"
+  sfxEnemyDie <- loadAudio "scavengers_enemy2.aif"
+  sfxMusic <- ByteString.readFile ("resources" </> "audio" </> "scavengers_music.ogg")
   sfxDie <- loadAudio "scavengers_die.aif"
-  SDL.Mixer.setMusicVolume 20
-  SDL.Mixer.playMusic SDL.Mixer.Forever sfxMusic
   pure
     Env.Env
       { prop = prop,
+        music = sfxMusic,
         ground = ground,
         obstacle = obstacle,
         wall = wall,
         misc =
           Env.Misc
-            { sfxEnemy = sfxEnemy,
-              sfxSoda = sfxSoda,
+            { sfxSoda = sfxSoda,
               sfxFruit = sfxFruit
             },
+        enemy = Env.Enemy {sfxAttack = sfxEnemyAttack, sfxDie = sfxEnemyDie},
         player =
           Env.Player
             { attack = playerAttack,

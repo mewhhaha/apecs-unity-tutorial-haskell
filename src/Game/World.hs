@@ -34,10 +34,36 @@ makeWorld
     ''CActionStream,
     ''CStat,
     ''CFruit,
-    ''CSoda
+    ''CSoda,
+    ''CDead,
+    ''CWin,
+    ''CLevel
   ]
 
 type System' a = System World a
 
 instance MonadFail (SystemT World IO) where
   fail s = lift (Prelude.fail s)
+
+type All =
+  ( ( CPosition,
+      CPlayer,
+      CDrawable,
+      CDead,
+      CAnimation,
+      CSoda
+    ),
+    ( CGround,
+      CWall,
+      CObstacle,
+      CProp,
+      CGoal,
+      CEnemy
+    ),
+    ( CVampire,
+      CZombie,
+      CActionStream,
+      CStat,
+      CFruit
+    )
+  )
