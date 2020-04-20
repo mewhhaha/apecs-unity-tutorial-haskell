@@ -19,7 +19,6 @@ makeWorld
   "World"
   [ ''CPosition,
     ''CPlayer,
-    ''CDrawable,
     ''CTime,
     ''CIsRunning,
     ''CAnimation,
@@ -31,13 +30,12 @@ makeWorld
     ''CEnemy,
     ''CVampire,
     ''CZombie,
-    ''CActionStream,
     ''CStat,
     ''CFruit,
     ''CSoda,
     ''CDead,
-    ''CWin,
-    ''CLevel
+    ''CLevel,
+    ''CLatest
   ]
 
 type System' a = System World a
@@ -48,7 +46,6 @@ instance MonadFail (SystemT World IO) where
 type All =
   ( ( CPosition,
       CPlayer,
-      CDrawable,
       CDead,
       CAnimation,
       CSoda
@@ -62,7 +59,6 @@ type All =
     ),
     ( CVampire,
       CZombie,
-      CActionStream,
       CStat,
       CFruit
     )

@@ -1,4 +1,4 @@
-module Creature.Zombie (idle, new, attack) where
+module Creature.Zombie (idle, new, attack, animate) where
 
 import Apecs
 import Control.Monad (void)
@@ -11,5 +11,8 @@ idle = CAnimation 0 0.8
 
 attack = CAnimation 0 0.4
 
+animate ZIdle = idle
+animate ZAttack = attack
+
 new :: V2 Double -> System' ()
-new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 1}, CActionStream ((0, []) :| []), CZombie ZIdle, idle, CPosition position)
+new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 1}, CZombie ZIdle, idle, CPosition position)

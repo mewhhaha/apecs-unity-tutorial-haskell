@@ -18,4 +18,4 @@ animate PAttack = attack
 animate PIdle = idle
 
 new :: V2 Double -> System' ()
-new position = void $ newEntity (CPlayer (PIdle :| []), CStat Stat {hitpoints = 10}, CActionStream ((0, []) :| []), CPosition position, idle)
+new position = void $ newEntity (CPlayer [PIdle], CStat Stat {hitpoints = 10}, CPosition position, idle)

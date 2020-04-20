@@ -67,19 +67,17 @@ import System.Random
 
 toTime dt = floor (dt * 10000)
 
-send :: Entity -> Action -> System' ()
-send e action = modify e $ \(CActionStream ((t, as) :| rest)) -> CActionStream ((t, action : as) :| rest)
+record :: Happened -> System' ()
+record = records . (: [])
 
-sends :: Entity -> [Action] -> System' ()
-sends e actions = modify e $ \(CActionStream ((t, as) :| rest)) -> CActionStream ((t, actions ++ as) :| rest)
+records :: [Happened] -> System' ()
+records = modify global . (<>) . CLatest
 
 tick :: Double -> System' ()
 tick dt = do
   modify global $ \(CTime time) -> CTime (time + toTime dt)
   (CTime time) <- get global
-  cmap $ \(CActionStream stream@(as :| rest)) ->
-    let next = (time, [])
-     in Just $ CActionStream (if null as then next :| rest else next <| stream)
+  set global (CLatest [])
 
 whenJust :: Applicative m => Maybe a -> (a -> m ()) -> m ()
 whenJust Nothing _ = pure ()
@@ -150,7 +148,7 @@ initialize level = do
         go :: (Prop, Position) -> System' ()
         go (p, pos) =
           let new :: forall c. (Set World IO c) => c -> System' ()
-              new c = void $ newEntity (c, CPosition pos, Clip p, CActionStream ((0, []) :| []))
+              new c = void $ newEntity (c, CPosition pos, Clip p)
            in case p of
                 Exit -> new CGoal
                 Fruit -> new CFruit
@@ -181,28 +179,36 @@ dirToV2 = \case
   where
     distance = 1
 
-peekActions :: (Action -> Maybe a) -> Entity -> System' [a]
-peekActions f e = do
-  (_, actions) <- unwrap <$> get e
-  pure $ catMaybes (f <$> actions)
-  where
-    unwrap (CActionStream actions) = NonEmpty.head actions
+hurt :: Entity -> Word -> System' ()
+hurt e n =
+  modify e $ \(CStat Stat {hitpoints}) -> CStat Stat {hitpoints = hitpoints - fromIntegral n}
 
-sumHurt :: Entity -> System' Word
-sumHurt = fmap sum . peekActions sieveHurt
-  where
-    sieveHurt (Hurt d) = Just d
-    sieveHurt _ = Nothing
+recover :: Entity -> Word -> System' ()
+recover e n =
+  modify e $ \(CStat Stat {hitpoints}) -> CStat Stat {hitpoints = hitpoints + fromIntegral n}
 
 playerAttack :: Map.Map Position Entity -> Position -> System' ()
-playerAttack enemies next = cmapM_ $ \(_ :: CPlayer, CPosition pos, player :: Entity) ->
-  whenJust (Map.lookup next enemies) $ \enemy -> do
-    send enemy (Hurt 1)
-    send player Attack
+playerAttack enemies next = cmapM $ \(CPlayer state) ->
+  case Map.lookup next enemies of
+    Just enemy -> do
+      hurt enemy 1
+      records [PlayerAttack, EnemyHurt]
+      pure $ Right (CPlayer (PAttack : state))
+    Nothing -> pure (Left ())
 
 playerMove :: Set.Set Position -> Position -> System' ()
-playerMove occupied next = cmapM_ $ \(CPlayer _, CPosition pos, player :: Entity) ->
-  when (Set.notMember next occupied) $ send player (Movement next)
+playerMove occupied next = cmap $ \(CPlayer _, CPosition pos, latest :: CLatest) ->
+  eitherIf (const $ Set.notMember next occupied) (CPosition next, CLatest [PlayerMove] <> latest)
+
+playerWin :: Set.Set Position -> Position -> System' ()
+playerWin goal next = when (Set.member next goal) $ record PlayerWin
+
+stepPlayer :: Map.Map Position Entity -> Set.Set Position -> Set.Set Position -> Position -> System' ()
+stepPlayer enemies occupied goal next = do
+  cmap $ \(CPlayer _) -> Just (CPlayer mempty)
+  playerAttack enemies next
+  playerMove occupied next
+  playerWin goal next
 
 finishAnimation :: forall c d. (Members World IO c, Get World IO c, Set World IO d) => d -> System' ()
 finishAnimation to = cmap $ \(_ :: c, CAnimation time duration) ->
@@ -212,151 +218,84 @@ stepAnimation :: Double -> System' ()
 stepAnimation dt = do
   cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
   cmap $
-    \(CPlayer ps, CAnimation time duration) -> case (time >= duration, snd (NonEmpty.uncons ps)) of
-      (True, Just rest) -> Right (CPlayer rest, Player.animate . NonEmpty.head $ rest)
+    \(CPlayer ps, CAnimation time duration) -> case (time >= duration, ps) of
+      (True, a : rest@(b : _)) -> Right (CPlayer rest, Player.animate b)
       _ -> Left ()
 
 killEnemies :: System' ()
-killEnemies = cmapM $ \(CEnemy, CStat Stat {hitpoints}, enemy :: Entity) ->
-  pure $ eitherIf (const $ hitpoints <= 0) CDead
+killEnemies = cmapM $ \(CEnemy, CStat Stat {hitpoints}) ->
+  if hitpoints > 0
+    then pure $ Left ()
+    else do
+      record EnemyDie
+      pure $ Right CDead
 
-evalEnemies :: Map.Map Position Entity -> Set.Set Position -> System' ()
-evalEnemies targets =
-  cfoldM_ $ \occupied (CEnemy, CPosition pos, enemy :: Entity) -> do
+stepEnemies :: Map.Map Position Entity -> Set.Set Position -> System' ()
+stepEnemies targets =
+  cfoldM_ $ \occupied (CEnemy, enemyType :: Either CZombie CVampire, CPosition pos, enemy :: Entity) -> do
+    let setEnemy z v = case enemyType of
+          Left _ -> set enemy (CZombie z)
+          Right _ -> set enemy (CVampire v)
+    setEnemy ZIdle VIdle
     g <- lift newStdGen
     let (direction, _) = random g
         next = dirToV2 direction + pos
         unchanged = pure occupied
     case (Set.member next occupied, Map.lookup next targets) of
       (_, Just target) -> do
-        send target (Hurt 1)
-        send enemy Attack
+        hurt target 1
+        modify target $ \(CPlayer state) -> CPlayer (PHurt : state)
+        record PlayerHurt
+        record EnemyAttack
+        setEnemy ZAttack VAttack
         unchanged
       (True, _) -> unchanged
       _ -> do
-        send enemy (Movement next)
+        set enemy (CPosition next)
         pure (Set.insert next . Set.delete pos $ occupied)
 
-evalEvents :: [Event] -> Map.Map Position Entity -> Set.Set Position -> Set.Set Position -> System' ()
-evalEvents events enemies goal occupied =
-  cmapM_ $ \(CPlayer _, CPosition prev, player :: Entity) ->
-    whenJust (maybeIf (/= prev) $ move events prev) $ \next ->
-      case (Set.member next occupied, Map.lookup next enemies, Set.member next goal) of
-        (_, _, True) -> void $ newEntity CWin
-        (_, Just enemy, _) -> do
-          send enemy (Hurt 1)
-          send player Attack
-        (True, _, _) -> pure ()
-        _ -> send player (Movement next)
+stepItems :: Map.Map Position Entity -> System' ()
+stepItems pickers = do
+  pick @CFruit FruitPicked 1
+  pick @CSoda SodaPicked 2
   where
-    move :: [Event] -> Position -> Position
-    move = (+) . sum . mapMaybe dir
-      where
-        dir (InputMove d) = Just (dirToV2 d)
-        dir _ = Nothing
-
-peekLatest :: forall c d. (Members World IO c, Get World IO c, Set World IO d) => ([Action] -> d) -> System' ()
-peekLatest sys = cmap $ \(_ :: c, CActionStream stream) ->
-  let latest = snd . NonEmpty.head $ stream
-   in sys latest
-
-moveLatest :: forall c. (Members World IO c, Get World IO c) => System' ()
-moveLatest = peekLatest @c $ \latest ->
-  case listToMaybe . mapMaybe dests $ latest of
-    Nothing -> Left ()
-    Just dest -> Right (CPosition dest)
-  where
-    dests (Movement dest) = Just dest
-    dests _ = Nothing
-
-movePlayer :: System' ()
-movePlayer = moveLatest @CPlayer
-
-moveEnemies :: System' ()
-moveEnemies = moveLatest @CEnemy
-
-hurtLatest :: forall c. (Members World IO c, Get World IO c) => System' ()
-hurtLatest = cmap $ \(_ :: c, CStat Stat {hitpoints}, CActionStream stream) ->
-  let latest = snd . NonEmpty.head $ stream
-   in case maybeIf (/= 0) (sum . mapMaybe hurts $ latest) of
-        Nothing -> Left ()
-        Just damage -> Right (CStat Stat {hitpoints = hitpoints - fromIntegral damage})
-  where
-    hurts (Hurt damage) = Just damage
-    hurts _ = Nothing
-
-hurtEnemies :: System' ()
-hurtEnemies = hurtLatest @CEnemy
-
-hurtPlayer :: System' ()
-hurtPlayer = hurtLatest @CPlayer
-
-statePlayer :: System' ()
-statePlayer = peekLatest @CPlayer $ \latest ->
-  case Set.elems . Set.fromList $ mapMaybe toState latest of
-    [PAttack] -> toComp PAttack [PIdle]
-    (PHurt : _) -> toComp PHurt []
-    (a : as) -> toComp a as
-    _ -> Left ()
-  where
-    toComp a as = Right (CPlayer (a :| as), Player.animate a)
-    toState (Hurt _) = Just PHurt
-    toState Attack = Just PAttack
-    toState _ = Just PIdle
-
-stateZombie :: System' ()
-stateZombie = peekLatest @CZombie $ \latest -> case listToMaybe . sort $ latest of
-  Just Attack -> Right (CZombie ZAttack, Zombie.attack)
-  Just (Movement _) -> Right (CZombie ZIdle, Zombie.idle)
-  _ -> Left ()
-
-stateVampire :: System' ()
-stateVampire = peekLatest @CVampire $ \latest -> case listToMaybe . sort $ latest of
-  Just Attack -> Right (CVampire VAttack, Vampire.attack)
-  Just (Movement _) -> Right (CVampire VIdle, Vampire.idle)
-  _ -> Left ()
-
-evalItems :: Map.Map Position Entity -> System' ()
-evalItems pickers = do
-  pick @CFruit 1
-  pick @CSoda 2
-  where
-    pick :: forall c. (Members World IO c, Get World IO c) => Word -> System' ()
-    pick i = cmapM $ \(_ :: c, CPosition pos, self :: Entity) ->
+    pick :: forall c. (Members World IO c, Get World IO c) => Happened -> Word -> System' ()
+    pick happening i = cmapM $ \(_ :: c, CPosition pos, self :: Entity) ->
       case Map.lookup pos pickers of
         Nothing -> pure $ Left ()
         Just picker -> do
-          send picker (Recover i)
+          recover picker i
+          record happening
           pure $ Right CDead
 
 removeDead :: System' ()
 removeDead = cmap $ \CDead -> Not @All
 
+stepState :: System' ()
+stepState = do
+  cmap $ \(CPlayer state) -> let state' = reverse (PIdle : state) in Just (CPlayer state', Player.animate (head state'))
+  cmap $ \(CZombie state) -> Just (Zombie.animate state)
+  cmap $ \(CVampire state) -> Just (Vampire.animate state)
+
 step :: Env.Env -> Double -> [Event] -> System' World
-step _ dt actions = do
+step _ dt events = do
   removeDead
   tick dt
   stepAnimation dt
-  let shouldUpdate = not . null $ actions
-  when shouldUpdate $ do
+  shouldUpdate <- evalNext events
+  whenJust shouldUpdate $ \next -> do
+    enemies <- getEntities @CEnemy
     walls <- getEntities @CWall
     obstacles <- getEntities @CObstacle
-    enemies <- getEntities @CEnemy
     goal <- Map.keysSet <$> getEntities @CGoal
     let occupied = foldl1 Set.union $ Map.keysSet <$> [walls, obstacles, enemies]
-    evalEvents actions enemies goal occupied
-    hurtEnemies
+    stepPlayer enemies occupied goal next
     killEnemies
-    movePlayer
-    player <- getEntities @CPlayer
-    evalItems player
-    evalEnemies player occupied
-    hurtPlayer
-    moveEnemies
-    statePlayer
-    stateZombie
-    stateVampire
-  win <- cfold (\_ CWin -> True) False
+    targets <- getEntities @CPlayer
+    stepItems targets
+    stepEnemies targets occupied
+    stepState
+  win <- (\(CLatest latest) -> any isPlayerWin latest) <$> get global
   if not win
     then ask
     else do
@@ -368,37 +307,62 @@ step _ dt actions = do
     getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
     getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
 
-isMovement :: Action -> Bool
-isMovement (Movement _) = True
-isMovement _ = False
-
-isAttack :: Action -> Bool
-isAttack Attack = True
-isAttack _ = False
+evalNext :: [Event] -> System' (Maybe Position)
+evalNext events =
+  flip cfoldM Nothing $
+    \_ (CPlayer _, CPosition prev) ->
+      pure (maybeIf (/= prev) $ move events prev)
+  where
+    move :: [Event] -> Position -> Position
+    move = (+) . sum . mapMaybe dir
+      where
+        dir (InputMove d) = Just (dirToV2 d)
+        dir _ = Nothing
 
 whenHas :: forall c. (Members World IO c, Get World IO c) => System' () -> System' ()
 whenHas op = do
   has <- cfold (\prev (_ :: c) -> prev || True) False
   when has op
 
+isPlayerMove :: Happened -> Bool
+isPlayerMove PlayerMove = True
+isPlayerMove _ = False
+
+isPlayerAttack :: Happened -> Bool
+isPlayerAttack PlayerAttack = True
+isPlayerAttack _ = False
+
+isEnemyAttack :: Happened -> Bool
+isEnemyAttack EnemyAttack = True
+isEnemyAttack _ = False
+
+isSodaPicked :: Happened -> Bool
+isSodaPicked SodaPicked = True
+isSodaPicked _ = False
+
+isFruitPicked :: Happened -> Bool
+isFruitPicked FruitPicked = True
+isFruitPicked _ = False
+
+isEnemyDie :: Happened -> Bool
+isEnemyDie EnemyDie = True
+isEnemyDie _ = False
+
+isPlayerWin :: Happened -> Bool
+isPlayerWin PlayerWin = True
+isPlayerWin _ = False
+
 draw :: Env.Env -> SDL.Renderer -> System' ()
 draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, prop, misc} r = do
   isMusicPlay <- SDL.Mixer.playingMusic
   unless isMusicPlay (playMusic music)
-  cmapM_ $ \(_ :: CPlayer, CActionStream stream) -> do
-    let latest = snd . NonEmpty.head $ stream
-    when (any isMovement latest) (playFootstep player)
-    when (any isAttack latest) (playChop player)
-  whenHas @(CSoda, CDead) (playSoda misc)
-  whenHas @(CFruit, CDead) (playFruit misc)
-  whenHas @(CEnemy, CDead) (playEnemyDie enemy)
-  enemyAttack <-
-    cfold
-      ( \prev (CEnemy, CActionStream stream) ->
-          let latest = snd . NonEmpty.head $ stream in prev || (any isAttack latest)
-      )
-      False
-  when enemyAttack (playEnemyAttack enemy)
+  (CLatest latest) <- get global
+  when (any isPlayerMove latest) (playFootstep player)
+  when (any isPlayerAttack latest) (playChop player)
+  when (any isEnemyAttack latest) (playEnemyAttack enemy)
+  when (any isSodaPicked latest) (playSoda misc)
+  when (any isFruitPicked latest) (playFruit misc)
+  when (any isEnemyDie latest) (playEnemyDie enemy)
   sequence_
     [ drawSheet ground,
       drawSheet wall,
@@ -454,10 +418,10 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
       \pos time dur (CPlayer p) ->
         let render' :: forall n. (KnownNat n, 1 <= n) => ASheet n -> IO ()
             render' = render . (pos,) . linear time dur
-         in case NonEmpty.head p of
-              PIdle -> render' idle
-              PHurt -> render' hurt
-              PAttack -> render' attack
+         in case listToMaybe p of
+              (Just PIdle) -> render' idle
+              (Just PHurt) -> render' hurt
+              (Just PAttack) -> render' attack
     drawVampire :: Env.Vampire -> System' ()
     drawVampire Env.Vampire {idle, attack} = drawAnimation @CVampire $
       \pos time dur (CVampire p) ->

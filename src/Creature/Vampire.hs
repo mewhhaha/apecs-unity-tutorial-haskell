@@ -1,4 +1,4 @@
-module Creature.Vampire (idle, new, attack) where
+module Creature.Vampire (idle, new, attack, animate) where
 
 import Apecs
 import Control.Monad (void)
@@ -11,5 +11,8 @@ idle = CAnimation 0 0.5
 
 attack = CAnimation 0 0.4
 
+animate VIdle = idle
+animate VAttack = attack
+
 new :: V2 Double -> System' ()
-new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 2}, CActionStream ((0, []) :| []), CVampire VIdle, idle, CPosition position)
+new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 2}, CVampire VIdle, idle, CPosition position)

@@ -10,7 +10,8 @@
 module Game.Component where
 
 import Apecs
-import Data.List.NonEmpty (NonEmpty)
+import Apecs.Experimental.Reactive
+import Data.List.NonEmpty (NonEmpty (..))
 import GHC.TypeNats
 import Linear
 import Linear.V2
@@ -40,7 +41,7 @@ data Zombie = ZIdle | ZAttack
 data Vampire = VIdle | VAttack
   deriving (Enum, Bounded)
 
-data Action = Hurt Word | Attack | Movement (V2 Double) | Recover Word
+data Happened = PlayerAttack | PlayerMove | PlayerHurt | PlayerDie | PlayerWin | EnemyHurt | EnemyAttack | EnemyDie | SodaPicked | FruitPicked
   deriving (Eq, Ord)
 
 data Prop = Soda | Fruit | Exit
@@ -71,11 +72,7 @@ instance Random Obstacle where
   randomR = defaultEnumRandomR
   random = defaultBoundedRandom
 
-data CWin = CWin
-
 type Position = V2 Double
-
-data CDrawable = Drawable
 
 newtype Stat
   = Stat
@@ -86,7 +83,7 @@ newtype CTime = CTime Integer
 
 newtype CPosition = CPosition Position
 
-newtype CPlayer = CPlayer (NonEmpty Player)
+newtype CPlayer = CPlayer [Player]
 
 data CGoal = CGoal
 
@@ -121,7 +118,7 @@ data CIsRunning = Running | Paused | Stopped
 
 data CAnimation = CAnimation Double Double
 
-newtype CActionStream = CActionStream (NonEmpty (Integer, [Action]))
+newtype CLatest = CLatest [Happened]
 
 instance Component CPosition where type Storage CPosition = Apecs.Map CPosition
 
@@ -132,10 +129,6 @@ instance Component CSoda where type Storage CSoda = Apecs.Map CSoda
 instance Component CFruit where type Storage CFruit = Apecs.Map CFruit
 
 instance Component CStat where type Storage CStat = Apecs.Map CStat
-
-instance Component CActionStream where type Storage CActionStream = Apecs.Map CActionStream
-
-instance Component CDrawable where type Storage CDrawable = Apecs.Map CDrawable
 
 instance Component CAnimation where type Storage CAnimation = Apecs.Map CAnimation
 
@@ -159,6 +152,12 @@ instance Semigroup CTime where (CTime t1) <> (CTime t2) = CTime (t1 + t2)
 
 instance Monoid CTime where mempty = CTime 0
 
+instance Component CLatest where type Storage CLatest = Apecs.Global CLatest
+
+instance Semigroup CLatest where (CLatest t1) <> (CLatest t2) = CLatest (t1 <> t2)
+
+instance Monoid CLatest where mempty = CLatest []
+
 instance Component CLevel where type Storage CLevel = Apecs.Global CLevel
 
 instance Semigroup CLevel where (CLevel t1) <> (CLevel t2) = CLevel (t1 + t2)
@@ -173,7 +172,5 @@ instance Semigroup CIsRunning where
 instance Monoid CIsRunning where mempty = Stopped
 
 instance Component CPlayer where type Storage CPlayer = Unique CPlayer
-
-instance Component CWin where type Storage CWin = Unique CWin
 
 instance Component CGoal where type Storage CGoal = Unique CGoal
