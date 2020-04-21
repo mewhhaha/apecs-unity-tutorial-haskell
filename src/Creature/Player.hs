@@ -17,5 +17,5 @@ animate PHurt = hurt
 animate PAttack = attack
 animate PIdle = idle
 
-new :: V2 Double -> System' ()
+new :: Position -> System' ()
 new position = void $ newEntity (CPlayer [PIdle], CStat Stat {hitpoints = 10}, CPosition position, idle)

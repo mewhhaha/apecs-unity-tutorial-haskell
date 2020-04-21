@@ -21,6 +21,7 @@ import Apecs
     Has,
     Members,
     Not (..),
+    Proxy (..),
     Set,
     ask,
     cfold,
@@ -29,6 +30,7 @@ import Apecs
     cmap,
     cmapM,
     cmapM_,
+    exists,
     get,
     global,
     lift,
@@ -37,10 +39,11 @@ import Apecs
     runWith,
     set,
   )
+import Apecs.Experimental.Reactive
 import Apecs.SDL (play, renderSprite)
 import Apecs.SDL.Internal (ASheet, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
 import Control.Arrow
-import Control.Monad (forM_, unless, void, when)
+import Control.Monad (filterM, forM_, unless, void, when)
 import qualified Control.Monad.State.Strict as State
 import qualified Creature.Player as Player
 import qualified Creature.Vampire as Vampire
@@ -93,7 +96,7 @@ eitherIf f a = if f a then Right a else Left ()
 maybeIf :: (a -> Bool) -> a -> Maybe a
 maybeIf f a = if f a then Just a else Nothing
 
-spread :: RandomGen r => Int -> r -> State.State [V2 Double] [V2 Double]
+spread :: RandomGen r => Int -> r -> State.State [Position] [Position]
 spread starts g = do
   positions <- State.get
   return (Set.toList . Set.fromList . concat $ start positions <$> gs)
@@ -101,14 +104,14 @@ spread starts g = do
     decreaseChance = 0.1
     initialChance = 0.4
     gs = take starts $ iterate (snd . split) g
-    start :: RandomGen r => [V2 Double] -> r -> [V2 Double]
+    start :: RandomGen r => [Position] -> r -> [Position]
     start positions g = expand g' initialChance n
       where
         ps = Set.fromList positions
         (n, g') = randPos g ps
-        randPos :: RandomGen r => r -> Set.Set (V2 Double) -> (V2 Double, r)
+        randPos :: RandomGen r => r -> Set.Set (Position) -> (Position, r)
         randPos g xs = let (n, g') = randomR (0, Set.size xs - 1) g in (Set.elemAt n xs, g')
-        expand :: RandomGen r => r -> Double -> V2 Double -> [V2 Double]
+        expand :: RandomGen r => r -> Double -> Position -> [Position]
         expand g chance n = n : concat (expand (snd . split $ g) (chance - decreaseChance) <$> neighbours)
           where
             neighbours =
@@ -165,9 +168,9 @@ initialize level = do
       let (picked, rest) = splitAt n (shuffle r state)
       State.put rest
       return picked
-    xs :: [Double]
+    xs :: [Int]
     xs = [0 .. 19]
-    ys :: [Double]
+    ys :: [Int]
     ys = [0 .. 14]
 
 dirToV2 :: Direction -> Position
@@ -187,28 +190,38 @@ recover :: Entity -> Word -> System' ()
 recover e n =
   modify e $ \(CStat Stat {hitpoints}) -> CStat Stat {hitpoints = hitpoints + fromIntegral n}
 
-playerAttack :: Map.Map Position Entity -> Position -> System' ()
-playerAttack enemies next = cmapM $ \(CPlayer state) ->
-  case Map.lookup next enemies of
-    Just enemy -> do
-      hurt enemy 1
-      records [PlayerAttack, EnemyHurt]
-      pure $ Right (CPlayer (PAttack : state))
-    Nothing -> pure (Left ())
+hasAny :: forall c. Get World IO c => [Entity] -> System' Bool
+hasAny = fmap (not . null) . filterM (`exists` Proxy @c)
 
-playerMove :: Set.Set Position -> Position -> System' ()
-playerMove occupied next = cmap $ \(CPlayer _, CPosition pos, latest :: CLatest) ->
-  eitherIf (const $ Set.notMember next occupied) (CPosition next, CLatest [PlayerMove] <> latest)
+getAny :: forall c. Get World IO c => [Entity] -> System' (Maybe Entity)
+getAny = fmap listToMaybe . filterM (`exists` Proxy @c)
 
-playerWin :: Set.Set Position -> Position -> System' ()
-playerWin goal next = when (Set.member next goal) $ record PlayerWin
+entitiesAt :: Position -> System' [Entity]
+entitiesAt pos = withReactive $ ixLookup (CPosition pos)
 
-stepPlayer :: Map.Map Position Entity -> Set.Set Position -> Set.Set Position -> Position -> System' ()
-stepPlayer enemies occupied goal next = do
-  cmap $ \(CPlayer _) -> Just (CPlayer mempty)
-  playerAttack enemies next
-  playerMove occupied next
-  playerWin goal next
+stepPlayer :: Position -> System' ()
+stepPlayer next =
+  cmapM $ \(CPlayer state) -> do
+    cmap $ \(CPlayer _) -> Just (CPlayer mempty)
+    at <- entitiesAt next
+    win <- hasAny @CGoal at
+    attack <- getAny @CEnemy at
+    occupied <- hasAny @(Not CGround, Not CSoda, Not CFruit) at
+    when win $ record PlayerWin
+    moved <-
+      if not occupied
+        then do
+          record PlayerMove
+          pure $ Right (CPosition next)
+        else pure $ Left ()
+    attacked <-
+      case attack of
+        Just enemy -> do
+          hurt enemy 1
+          records [PlayerAttack, EnemyHurt]
+          pure $ Just (CPlayer [PAttack])
+        Nothing -> pure $ Just (CPlayer [])
+    pure (attacked, moved)
 
 finishAnimation :: forall c d. (Members World IO c, Get World IO c, Set World IO d) => d -> System' ()
 finishAnimation to = cmap $ \(_ :: c, CAnimation time duration) ->
@@ -230,29 +243,28 @@ killEnemies = cmapM $ \(CEnemy, CStat Stat {hitpoints}) ->
       record EnemyDie
       pure $ Right CDead
 
-stepEnemies :: Map.Map Position Entity -> Set.Set Position -> System' ()
+stepEnemies :: Map.Map Position Entity -> System' ()
 stepEnemies targets =
-  cfoldM_ $ \occupied (CEnemy, enemyType :: Either CZombie CVampire, CPosition pos, enemy :: Entity) -> do
-    let setEnemy z v = case enemyType of
-          Left _ -> set enemy (CZombie z)
-          Right _ -> set enemy (CVampire v)
-    setEnemy ZIdle VIdle
+  cmapM $ \(CEnemy, eitherEnemy :: Either CZombie CVampire, CPosition pos) -> do
     g <- lift newStdGen
     let (direction, _) = random g
         next = dirToV2 direction + pos
-        unchanged = pure occupied
-    case (Set.member next occupied, Map.lookup next targets) of
-      (_, Just target) -> do
+        state :: Zombie -> Vampire -> Either CZombie CVampire
+        state z v = case eitherEnemy of
+          Left _ -> Left $ CZombie z
+          Right _ -> Right $ CVampire v
+    at <- entitiesAt next
+    playerAt <- getAny @CPlayer at
+    occupied <- hasAny @(Not CPlayer, Not CGround) at
+    case (playerAt, occupied) of
+      (Just target, _) -> do
         hurt target 1
         modify target $ \(CPlayer state) -> CPlayer (PHurt : state)
         record PlayerHurt
         record EnemyAttack
-        setEnemy ZAttack VAttack
-        unchanged
-      (True, _) -> unchanged
-      _ -> do
-        set enemy (CPosition next)
-        pure (Set.insert next . Set.delete pos $ occupied)
+        pure $ Right (state ZAttack VAttack)
+      (_, True) -> pure $ Right (state ZIdle VIdle)
+      _ -> pure $ Left (CPosition next, state ZIdle VIdle)
 
 stepItems :: Map.Map Position Entity -> System' ()
 stepItems pickers = do
@@ -284,16 +296,11 @@ step _ dt events = do
   stepAnimation dt
   shouldUpdate <- evalNext events
   whenJust shouldUpdate $ \next -> do
-    enemies <- getEntities @CEnemy
-    walls <- getEntities @CWall
-    obstacles <- getEntities @CObstacle
-    goal <- Map.keysSet <$> getEntities @CGoal
-    let occupied = foldl1 Set.union $ Map.keysSet <$> [walls, obstacles, enemies]
-    stepPlayer enemies occupied goal next
+    stepPlayer next
     killEnemies
     targets <- getEntities @CPlayer
     stepItems targets
-    stepEnemies targets occupied
+    stepEnemies targets
     stepState
   win <- (\(CLatest latest) -> any isPlayerWin latest) <$> get global
   if not win
@@ -402,16 +409,16 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     playSoda Env.Misc {sfxSoda} = playMiscSound sfxSoda
     playFruit :: Env.Misc -> System' ()
     playFruit Env.Misc {sfxFruit} = playMiscSound sfxFruit
-    toScreen :: Integral a => V2 Double -> V2 a
-    toScreen p = round . (* 32) <$> p
-    render :: forall s. (Sprite s) => (V2 Double, s) -> IO ()
+    toScreen :: Integral a => Position -> V2 a
+    toScreen p = fromIntegral . (* 32) <$> p
+    render :: forall s. (Sprite s) => (Position, s) -> IO ()
     render (p, a) = renderSprite r (toScreen p) a
-    cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> (V2 Double, s)) -> System' ()
+    cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> (Position, s)) -> System' ()
     cdraw f = cfoldM (\acc c -> pure (acc >> render (f c))) mempty >>= lift
     drawSheet :: forall c. (Members World IO (Clip c), Get World IO (Clip c), Ord c) => Sheet c -> System' ()
     drawSheet s = cdraw $ \(Clip c, CPosition pos, _ :: Not CDead) ->
       (pos, (s {clip = Just c}))
-    drawAnimation :: forall c. (Members World IO c, Get World IO c) => (V2 Double -> Double -> Double -> c -> IO ()) -> System' ()
+    drawAnimation :: forall c. (Members World IO c, Get World IO c) => (Position -> Double -> Double -> c -> IO ()) -> System' ()
     drawAnimation f = cfoldM (\acc (c :: c, CPosition pos, _ :: Not CDead, CAnimation time dur) -> pure (acc >> f pos time dur c)) mempty >>= lift
     drawPlayer :: Env.Player -> System' ()
     drawPlayer Env.Player {idle, hurt, attack} = drawAnimation @CPlayer $

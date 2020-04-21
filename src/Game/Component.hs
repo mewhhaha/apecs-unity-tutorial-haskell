@@ -11,6 +11,7 @@ module Game.Component where
 
 import Apecs
 import Apecs.Experimental.Reactive
+import Data.Array
 import Data.List.NonEmpty (NonEmpty (..))
 import GHC.TypeNats
 import Linear
@@ -72,7 +73,7 @@ instance Random Obstacle where
   randomR = defaultEnumRandomR
   random = defaultBoundedRandom
 
-type Position = V2 Double
+type Position = V2 Int
 
 newtype Stat
   = Stat
@@ -82,6 +83,12 @@ newtype Stat
 newtype CTime = CTime Integer
 
 newtype CPosition = CPosition Position
+  deriving (Show, Eq, Ord)
+  deriving (Ix) via Position
+
+instance Bounded CPosition where
+  minBound = CPosition (V2 0 0)
+  maxBound = CPosition (V2 20 15)
 
 newtype CPlayer = CPlayer [Player]
 
@@ -120,7 +127,7 @@ data CAnimation = CAnimation Double Double
 
 newtype CLatest = CLatest [Happened]
 
-instance Component CPosition where type Storage CPosition = Apecs.Map CPosition
+instance Component CPosition where type Storage CPosition = Reactive (IxMap CPosition) (Apecs.Map CPosition)
 
 instance Component CDead where type Storage CDead = Apecs.Map CDead
 

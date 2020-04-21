@@ -14,5 +14,5 @@ attack = CAnimation 0 0.4
 animate ZIdle = idle
 animate ZAttack = attack
 
-new :: V2 Double -> System' ()
+new :: Position -> System' ()
 new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 1}, CZombie ZIdle, idle, CPosition position)
