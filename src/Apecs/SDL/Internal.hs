@@ -69,8 +69,8 @@ mkTexture = Texture
 mkSheet :: Texture -> Map.Map a (SDL.Rectangle CInt) -> Sheet a
 mkSheet = Sheet Nothing
 
-mkASheet :: forall n i. (Integral i, KnownNat n, 1 <= n) => Texture -> (i, i) -> ASheet n
-mkASheet t@(Texture _ ti) (w, h) = ASheet (Proxy @1) (mkSheet t clips)
+mkASheet :: forall n i. (Integral i, KnownNat n, 1 <= n) => (i, i) -> (i, i) -> Texture -> ASheet n
+mkASheet (w, h) (x, y) t@(Texture _ ti) = ASheet (Proxy @1) (mkSheet t clips)
   where
     size :: Natural
     size = natVal (Proxy :: Proxy n)
@@ -81,9 +81,10 @@ mkASheet t@(Texture _ ti) (w, h) = ASheet (Proxy @1) (mkSheet t clips)
       where
         rect n =
           let k = fromIntegral n - 1
-              x = (w * k) `mod` tw
-              y = ((w * k) `div` tw) * h
-           in (n, fromIntegral <$> mkRect x y w h)
+              offset = x + w * k
+              x' = offset `mod` tw
+              y' = y + (offset `div` tw) * h
+           in (n, fromIntegral <$> mkRect x' y' w h)
 
 animate :: forall b n. (KnownNat b, KnownNat n, 1 <= n, b <= n, 1 <= b) => ASheet n -> ASheet n
 animate (ASheet _ sheet) = ASheet f sheet
@@ -106,11 +107,18 @@ linear time duration = case nat of
     decide :: forall p. (KnownNat p, 1 <= p, p <= n) => Proxy p -> ASheet n -> ASheet n
     decide _ = animate @p
 
-mkClips :: forall a i. (Integral i, Enum a, Ord a, Bounded a) => (i, i) -> Map.Map a (SDL.Rectangle CInt)
-mkClips (w, h) = Map.fromList $ zipWith (\e x -> (e, mkRect (fromIntegral x) 0 (fromIntegral w) (fromIntegral h))) es xs
+mkClips :: forall a i. (Integral i, Enum a, Ord a, Bounded a) => (i, i) -> (i, i) -> Texture -> Map.Map a (SDL.Rectangle CInt)
+mkClips (w, h) (x, y) (Texture _ ti) = Map.fromList $ zip es (rect <$> xs)
   where
-    xs = iterate (+ w) 0
+    w' = fromIntegral w
+    h' = fromIntegral h
+    tw = SDL.textureWidth ti
+    xs = iterate (fromIntegral . (+ w')) (fromIntegral x)
     es = [minBound .. maxBound]
+    rect offset = mkRect x' y' w' h'
+      where
+        x' = offset `mod` tw
+        y' = fromIntegral y + (offset `div` tw) * h'
 
 withSDL :: (MonadIO m) => m a -> m ()
 withSDL op = do

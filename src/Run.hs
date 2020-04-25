@@ -43,7 +43,7 @@ import Apecs.Experimental.Reactive
 import Apecs.SDL (play, renderSprite)
 import Apecs.SDL.Internal (ASheet, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
 import Control.Arrow
-import Control.Monad (filterM, forM_, unless, void, when)
+import Control.Monad (filterM, forM_, unless, void, when, zipWithM_)
 import qualified Control.Monad.State.Strict as State
 import qualified Creature.Player as Player
 import qualified Creature.Vampire as Vampire
@@ -109,7 +109,7 @@ spread starts g = do
       where
         ps = Set.fromList positions
         (n, g') = randPos g ps
-        randPos :: RandomGen r => r -> Set.Set (Position) -> (Position, r)
+        randPos :: RandomGen r => r -> Set.Set Position -> (Position, r)
         randPos g xs = let (n, g') = randomR (0, Set.size xs - 1) g in (Set.elemAt n xs, g')
         expand :: RandomGen r => r -> Double -> Position -> [Position]
         expand g chance n = n : concat (expand (snd . split $ g) (chance - decreaseChance) <$> neighbours)
@@ -135,7 +135,7 @@ initialize level = do
           sequence [pick g 5, pick g 3, pick g 3, pick g 3, spread 10 g]
   newEnumsAt (randoms @Ground g) ground
   newEnumsAt (randoms @Wall g) (hedges ++ vedges)
-  newEnumsAt (randoms @Obstacle g) obstacles
+  newObstacles (randoms @ObstacleVariant g) obstacles
   sequence_ $ Zombie.new <$> zombies
   sequence_ $ Vampire.new <$> vampires
   Player.new (V2 1 (last ys - 1))
@@ -156,6 +156,10 @@ initialize level = do
                 Exit -> new CGoal
                 Fruit -> new CFruit
                 Soda -> new CSoda
+    newObstacles :: [ObstacleVariant] -> [Position] -> System' ()
+    newObstacles = zipWithM_ go
+      where
+        go v p = void $ newEntity (CPosition p, CObstacle (v, ONew))
     newEnumsAt :: (Set World IO (Clip a), Get World IO EntityCounter) => [a] -> [Position] -> System' ()
     newEnumsAt es ps = sequence_ $ newEntity . (Clip *** CPosition) <$> zip es ps
     ends :: [Double] -> (Int, Int)
@@ -202,7 +206,6 @@ entitiesAt pos = withReactive $ ixLookup (CPosition pos)
 stepPlayer :: Position -> System' ()
 stepPlayer next =
   cmapM $ \(CPlayer state) -> do
-    cmap $ \(CPlayer _) -> Just (CPlayer mempty)
     at <- entitiesAt next
     win <- hasAny @CGoal at
     attack <- getAny @CEnemy at
@@ -373,7 +376,7 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
   sequence_
     [ drawSheet ground,
       drawSheet wall,
-      drawSheet obstacle,
+      drawObstacle obstacle,
       drawSheet prop,
       drawPlayer player,
       drawVampire vampire,
@@ -413,13 +416,17 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     toScreen p = fromIntegral . (* 32) <$> p
     render :: forall s. (Sprite s) => (Position, s) -> IO ()
     render (p, a) = renderSprite r (toScreen p) a
-    cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> (Position, s)) -> System' ()
-    cdraw f = cfoldM (\acc c -> pure (acc >> render (f c))) mempty >>= lift
+    cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> Maybe (Position, s)) -> System' ()
+    cdraw f = cfoldM (\acc c -> pure (acc >> whenJust (f c) render)) mempty >>= lift
     drawSheet :: forall c. (Members World IO (Clip c), Get World IO (Clip c), Ord c) => Sheet c -> System' ()
     drawSheet s = cdraw $ \(Clip c, CPosition pos, _ :: Not CDead) ->
-      (pos, (s {clip = Just c}))
+      Just (pos, (s {clip = Just c}))
+    drawObstacle :: Map.Map ObstacleVariant (Sheet Obstacle) -> System' ()
+    drawObstacle variants = cdraw $ \(CPosition pos, CObstacle (variant, c), _ :: Not CDead) -> do
+      sheet <- Map.lookup variant variants
+      return (pos, sheet {clip = Just c})
     drawAnimation :: forall c. (Members World IO c, Get World IO c) => (Position -> Double -> Double -> c -> IO ()) -> System' ()
-    drawAnimation f = cfoldM (\acc (c :: c, CPosition pos, _ :: Not CDead, CAnimation time dur) -> pure (acc >> f pos time dur c)) mempty >>= lift
+    drawAnimation f = cmapM_ $ \(c :: c, CPosition pos, _ :: Not CDead, CAnimation time dur) -> lift $ f pos time dur c
     drawPlayer :: Env.Player -> System' ()
     drawPlayer Env.Player {idle, hurt, attack} = drawAnimation @CPlayer $
       \pos time dur (CPlayer p) ->

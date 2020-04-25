@@ -59,17 +59,20 @@ instance Random Ground where
   randomR = defaultEnumRandomR
   random = defaultBoundedRandom
 
-data Wall = W1 | W2 | W3 | W4 | W5 | W6 | W7
+data Wall = W1 | W2 | W3
   deriving (Eq, Ord, Enum, Bounded)
 
 instance Random Wall where
   randomR = defaultEnumRandomR
   random = defaultBoundedRandom
 
-data Obstacle = O1 | O2 | O3 | O4 | O5 | O6 | O7 | O8 | O9 | O10 | O11
+data Obstacle = ONew | ODamaged
+  deriving (Eq, Ord)
+
+data ObstacleVariant = O1 | O2 | O3 | O4 | O5 | O6 | O7 | O8
   deriving (Eq, Ord, Enum, Bounded)
 
-instance Random Obstacle where
+instance Random ObstacleVariant where
   randomR = defaultEnumRandomR
   random = defaultBoundedRandom
 
@@ -108,7 +111,7 @@ type CGround = Clip Ground
 
 type CWall = Clip Wall
 
-type CObstacle = Clip Obstacle
+newtype CObstacle = CObstacle (ObstacleVariant, Obstacle)
 
 type CProp = Clip Prop
 

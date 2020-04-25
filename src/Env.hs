@@ -14,6 +14,7 @@ import Foreign.C.Types
 import GHC.Natural
 import GHC.TypeNats
 import qualified Game.Component as C
+import Linear
 import qualified SDL
 import qualified SDL.Mixer
 import System.FilePath ((</>))
@@ -54,23 +55,42 @@ data Env
         player :: Player,
         prop :: Sheet C.Prop,
         ground :: Sheet C.Ground,
-        obstacle :: Sheet C.Obstacle,
+        obstacle :: Map.Map C.ObstacleVariant (Sheet C.Obstacle),
         wall :: Sheet C.Wall
       }
 
+obstacles :: Texture -> Map.Map C.ObstacleVariant (Sheet C.Obstacle)
+obstacles sheet =
+  Map.fromList $
+    fmap (mkSheet sheet)
+      <$> [ (C.O1, obstacle (x32 5, x32 2) (0, x32 6)),
+            (C.O2, obstacle (x32 6, x32 2) (x32 1, x32 6)),
+            (C.O3, obstacle (x32 7, x32 2) (x32 2, x32 6)),
+            (C.O4, obstacle (x32 0, x32 3) (x32 3, x32 6)),
+            (C.O5, obstacle (x32 3, x32 3) (x32 4, x32 6)),
+            (C.O6, obstacle (x32 5, x32 3) (x32 4, x32 6)),
+            (C.O7, obstacle (x32 6, x32 3) (x32 5, x32 6)),
+            (C.O8, obstacle (x32 7, x32 3) (x32 6, x32 6))
+          ]
+  where
+    x32 x = x * 32
+    mkRect32 (x, y) = mkRect x y 32 32
+    obstacle new damaged = Map.fromList [(C.ONew, mkRect32 new), (C.ODamaged, mkRect32 damaged)]
+
 resources :: SDL.Renderer -> IO Env.Env
 resources r = do
-  prop <- loadSheet32x32 "props.png"
-  ground <- loadSheet32x32 "ground.png"
-  wall <- loadSheet32x32 "obstacles.png"
-  obstacle <- loadSheet32x32 "wall.png"
-  playerAttack <- loadASheet32x32 "player_attack.png"
-  playerIdle <- loadASheet32x32 "player_idle.png"
-  playerHurt <- loadASheet32x32 "player_hurt.png"
-  vampireIdle <- loadASheet32x32 "vampire_idle.png"
-  vampireAttack <- loadASheet32x32 "vampire_attack.png"
-  zombieIdle <- loadASheet32x32 "zombie_idle.png"
-  zombieAttack <- loadASheet32x32 "zombie_attack.png"
+  sheet <- loadImage "Scavengers_SpriteSheet.png"
+  let prop = loadSheet32x32 (64, 64) sheet
+      ground = loadSheet32x32 (0, 128) sheet
+      wall = mkSheet sheet (Map.fromList [(C.W1, mkRect32 32 96), (C.W2, mkRect32 64 96), (C.W3, mkRect32 128 96)])
+      obstacle = obstacles sheet
+      playerAttack = loadASheet32x32 (0, 160) sheet
+      playerIdle = loadASheet32x32 (0, 0) sheet
+      playerHurt = loadASheet32x32 (192, 160) sheet
+      vampireIdle = loadASheet32x32 (128, 32) sheet
+      vampireAttack = loadASheet32x32 (128, 160) sheet
+      zombieIdle = loadASheet32x32 (192, 0) sheet
+      zombieAttack = loadASheet32x32 (64, 160) sheet
   sfxFootstep <- loadAudios ["scavengers_footstep1.aif", "scavengers_footstep2.aif"]
   sfxSoda <- loadAudios ["scavengers_soda1.ogg", "scavengers_soda2.ogg"]
   sfxFruit <- loadAudios ["scavengers_fruit1.aif", "scavengers_fruit2.aif"]
@@ -113,13 +133,14 @@ resources r = do
             }
       }
   where
+    mkRect32 x y = mkRect x y 32 32
     loadAudios :: SDL.Mixer.Loadable a => [FilePath] -> IO [a]
     loadAudios = traverse loadAudio
     loadAudio :: SDL.Mixer.Loadable a => FilePath -> IO a
     loadAudio f = SDL.Mixer.load ("resources" </> "audio" </> f)
     loadImage :: FilePath -> IO Texture
     loadImage f = loadTexture r ("resources" </> "sprites" </> f)
-    loadSheet32x32 :: forall a. (Enum a, Ord a, Bounded a) => FilePath -> IO (Sheet a)
-    loadSheet32x32 f = (`mkSheet` mkClips (32, 32)) <$> loadImage f
-    loadASheet32x32 :: forall n. (KnownNat n, 1 <= n) => FilePath -> IO (ASheet n)
-    loadASheet32x32 f = (`mkASheet` (32, 32)) <$> loadImage f
+    loadSheet32x32 :: forall a. (Enum a, Ord a, Bounded a) => (Int, Int) -> Texture -> Sheet a
+    loadSheet32x32 origin = mkSheet <$> id <*> mkClips (32, 32) origin
+    loadASheet32x32 :: forall n. (KnownNat n, 1 <= n) => (Int, Int) -> Texture -> ASheet n
+    loadASheet32x32 = mkASheet (32, 32)
