@@ -415,24 +415,22 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
       let randomIndex = fst (randomR (0, length chunks - 1) g)
       SDL.Mixer.setVolume 20 (0 :: SDL.Mixer.Channel)
       void $ SDL.Mixer.playOn ch SDL.Mixer.Once (chunks !! randomIndex)
-    playPlayerSound :: [SDL.Mixer.Chunk] -> System' ()
-    playPlayerSound = playSound 0
-    playMiscSound :: [SDL.Mixer.Chunk] -> System' ()
-    playMiscSound = playSound 1
-    playEnemySound :: [SDL.Mixer.Chunk] -> System' ()
-    playEnemySound = playSound 2
+    playerSound, miscSound, enemySound :: SDL.Mixer.Channel
+    playerSound = 0
+    miscSound = 1
+    enemySound = 2
     playFootstep :: Env.Player -> System' ()
-    playFootstep Env.Player {sfxFootstep} = playPlayerSound sfxFootstep
+    playFootstep Env.Player {sfxFootstep} = playSound playerSound sfxFootstep
     playChop :: Env.Player -> System' ()
-    playChop Env.Player {sfxChop} = playPlayerSound sfxChop
+    playChop Env.Player {sfxChop} = playSound playerSound sfxChop
     playEnemyAttack :: Env.Enemy -> System' ()
-    playEnemyAttack Env.Enemy {sfxAttack} = playEnemySound [sfxAttack]
+    playEnemyAttack Env.Enemy {sfxAttack} = playSound enemySound [sfxAttack]
     playEnemyDie :: Env.Enemy -> System' ()
-    playEnemyDie Env.Enemy {sfxDie} = playMiscSound [sfxDie]
+    playEnemyDie Env.Enemy {sfxDie} = playSound miscSound [sfxDie]
     playSoda :: Env.Misc -> System' ()
-    playSoda Env.Misc {sfxSoda} = playMiscSound sfxSoda
+    playSoda Env.Misc {sfxSoda} = playSound miscSound sfxSoda
     playFruit :: Env.Misc -> System' ()
-    playFruit Env.Misc {sfxFruit} = playMiscSound sfxFruit
+    playFruit Env.Misc {sfxFruit} = playSound miscSound sfxFruit
     toScreen :: Integral a => V2 Double -> V2 a
     toScreen p = floor . (* 32) <$> p
     interpolate :: Linear -> V2 Double
