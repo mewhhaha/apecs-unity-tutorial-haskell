@@ -15,4 +15,4 @@ animate VIdle = idle
 animate VAttack = attack
 
 new :: Position -> System' ()
-new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 2}, CVampire VIdle, idle, CPosition position)
+new position = void $ newEntity (CEnemy, CStat Stat {life = 2}, CVampire VIdle, idle, CLinear (Linear 0 position position), CPosition position)

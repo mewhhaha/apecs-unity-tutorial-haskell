@@ -4,6 +4,7 @@ Problems
 
 - Some .aif files wouldn't work so converted them to ogg
 - Because of https://github.com/haskell-game/sdl2-mixer/issues/5
+  / inspiration mallRL SDL2 tutoprial
 
 ## Building on Windows
 

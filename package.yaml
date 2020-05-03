@@ -4,6 +4,7 @@ library:
     - sdl2
     - sdl2-image
     - sdl2-mixer
+    - sdl2-ttf
     - apecs
     - linear
     - containers
@@ -17,6 +18,7 @@ library:
     - template-haskell
     - typelits-witnesses
     - text
+    - StateVar
 copyright: 2020 Author name here
 maintainer: example@example.com
 dependencies:

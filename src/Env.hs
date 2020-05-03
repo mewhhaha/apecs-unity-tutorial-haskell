@@ -16,6 +16,7 @@ import GHC.TypeNats
 import qualified Game.Component as C
 import Linear
 import qualified SDL
+import qualified SDL.Font
 import qualified SDL.Mixer
 import System.FilePath ((</>))
 
@@ -48,6 +49,7 @@ data Enemy = Enemy {sfxAttack :: SDL.Mixer.Chunk, sfxDie :: SDL.Mixer.Chunk}
 data Env
   = Env
       { misc :: Misc,
+        font :: Map.Map SDL.Font.PointSize SDL.Font.Font,
         zombie :: Zombie,
         music :: ByteString.ByteString,
         enemy :: Enemy,
@@ -55,11 +57,11 @@ data Env
         player :: Player,
         prop :: Sheet C.Prop,
         ground :: Sheet C.Ground,
-        obstacle :: Map.Map C.ObstacleVariant (Sheet C.Obstacle),
+        obstacle :: Map.Map C.Obstacle (Sheet C.ObstacleHealth),
         wall :: Sheet C.Wall
       }
 
-obstacles :: Texture -> Map.Map C.ObstacleVariant (Sheet C.Obstacle)
+obstacles :: Texture -> Map.Map C.Obstacle (Sheet C.ObstacleHealth)
 obstacles sheet =
   Map.fromList $
     fmap (mkSheet sheet)
@@ -79,6 +81,7 @@ obstacles sheet =
 
 resources :: SDL.Renderer -> IO Env.Env
 resources r = do
+  font <- loadFont "PressStart2P-regular.ttf"
   sheet <- loadImage "Scavengers_SpriteSheet.png"
   let prop = loadSheet32x32 (64, 64) sheet
       ground = loadSheet32x32 (0, 128) sheet
@@ -102,6 +105,7 @@ resources r = do
   pure
     Env.Env
       { prop = prop,
+        font = font,
         music = sfxMusic,
         ground = ground,
         obstacle = obstacle,
@@ -138,6 +142,11 @@ resources r = do
     loadAudios = traverse loadAudio
     loadAudio :: SDL.Mixer.Loadable a => FilePath -> IO a
     loadAudio f = SDL.Mixer.load ("resources" </> "audio" </> f)
+    loadFont :: FilePath -> IO (Map.Map SDL.Font.PointSize SDL.Font.Font)
+    loadFont f = do
+      let sizes = [16, 18]
+      fonts <- mapM (SDL.Font.load ("resources" </> "fonts" </> f)) sizes
+      return . Map.fromList $ zip sizes fonts
     loadImage :: FilePath -> IO Texture
     loadImage f = loadTexture r ("resources" </> "sprites" </> f)
     loadSheet32x32 :: forall a. (Enum a, Ord a, Bounded a) => (Int, Int) -> Texture -> Sheet a

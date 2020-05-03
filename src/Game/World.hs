@@ -34,6 +34,7 @@ makeWorld
     ''CFruit,
     ''CSoda,
     ''CDead,
+    ''CLinear,
     ''CLevel,
     ''CLatest
   ]
@@ -59,6 +60,7 @@ type All =
     ),
     ( CVampire,
       CZombie,
+      CLinear,
       CStat,
       CFruit
     )

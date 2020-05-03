@@ -29,6 +29,7 @@ import Language.Haskell.TH
 import Linear (V2 (..))
 import qualified SDL
 import SDL (($=))
+import qualified SDL.Font
 import qualified SDL.Image
 import qualified SDL.Mixer
 
@@ -37,6 +38,8 @@ data Texture = Texture SDL.Texture SDL.TextureInfo
 class Sprite a where
   getTexture :: a -> Texture
   getFrame :: a -> Maybe (SDL.Rectangle CInt)
+
+newtype TextElement = TextElement Texture
 
 type Size (n :: Nat) = Proxy n
 
@@ -52,6 +55,10 @@ data ASheet (n :: Nat) where
 instance Sprite Texture where
   getFrame _ = Nothing
   getTexture = id
+
+instance Sprite TextElement where
+  getFrame _ = Nothing
+  getTexture (TextElement t) = t
 
 instance (Ord a, Eq a) => Sprite (Sheet a) where
   getFrame Sheet {clip, clips} = clip >>= (`Map.lookup` clips)
@@ -132,6 +139,12 @@ withSDLImage op = do
   void op
   SDL.Image.quit
 
+withSDLFont :: (MonadIO m) => m a -> m ()
+withSDLFont op = do
+  SDL.Font.initialize
+  op
+  SDL.Font.quit
+
 withWindow :: (MonadIO m) => Text -> (Int, Int) -> (SDL.Window -> m a) -> m ()
 withWindow title (x, y) op = do
   w <- SDL.createWindow title p
@@ -154,11 +167,6 @@ rendererConfig =
     { SDL.rendererType = SDL.AcceleratedVSyncRenderer,
       SDL.rendererTargetTexture = False
     }
-
-renderSurfaceToWindow :: (MonadIO m) => SDL.Window -> SDL.Surface -> SDL.Surface -> m ()
-renderSurfaceToWindow w s i =
-  SDL.surfaceBlit i Nothing s Nothing
-    >> SDL.updateWindowSurface w
 
 isContinue :: Maybe SDL.Event -> Bool
 isContinue = maybe True (not . isQuitEvent)

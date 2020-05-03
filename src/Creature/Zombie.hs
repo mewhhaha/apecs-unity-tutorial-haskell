@@ -15,4 +15,4 @@ animate ZIdle = idle
 animate ZAttack = attack
 
 new :: Position -> System' ()
-new position = void $ newEntity (CEnemy, CStat Stat {hitpoints = 1}, CZombie ZIdle, idle, CPosition position)
+new position = void $ newEntity (CEnemy, CStat Stat {life = 1}, CZombie ZIdle, idle, CLinear (Linear 0 position position), CPosition position)
