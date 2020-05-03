@@ -26,7 +26,7 @@ import GHC.Natural
 import GHC.TypeLits.Compare (isLE)
 import GHC.TypeNats
 import Language.Haskell.TH
-import Linear (V2 (..))
+import Linear (V2 (..), V4 (..))
 import qualified SDL
 import SDL (($=))
 import qualified SDL.Font
@@ -35,7 +35,7 @@ import qualified SDL.Mixer
 
 data Texture = Texture SDL.Texture SDL.TextureInfo
 
-class Sprite a where
+class Drawable a where
   getTexture :: a -> Texture
   getFrame :: a -> Maybe (SDL.Rectangle CInt)
 
@@ -52,23 +52,30 @@ data Sheet a = Sheet {clip :: Maybe a, texture :: Texture, clips :: Map.Map a (S
 data ASheet (n :: Nat) where
   ASheet :: (KnownNat a, a <= n, 1 <= a, 1 <= n) => {frame :: Frame a, sheet :: Sheet Natural} -> ASheet n
 
-instance Sprite Texture where
+instance Drawable Texture where
   getFrame _ = Nothing
   getTexture = id
 
-instance Sprite TextElement where
+instance Drawable TextElement where
   getFrame _ = Nothing
   getTexture (TextElement t) = t
 
-instance (Ord a, Eq a) => Sprite (Sheet a) where
+instance (Ord a, Eq a) => Drawable (Sheet a) where
   getFrame Sheet {clip, clips} = clip >>= (`Map.lookup` clips)
   getTexture = texture
 
-instance Sprite (ASheet a) where
+instance Drawable (ASheet a) where
   getFrame ASheet {frame, sheet} = getFrame (sheet {clip = Just n})
     where
       n = natVal frame
   getTexture = texture . sheet
+
+mkTextElement :: MonadIO m => SDL.Renderer -> SDL.Font.Font -> Text -> m TextElement
+mkTextElement r font text = do
+  surface <- SDL.Font.blended font (V4 maxBound maxBound maxBound maxBound) text
+  texture <- SDL.createTextureFromSurface r surface
+  info <- SDL.queryTexture texture
+  return $ TextElement (mkTexture texture info)
 
 mkTexture :: SDL.Texture -> SDL.TextureInfo -> Texture
 mkTexture = Texture

@@ -2,14 +2,14 @@
 
 module Apecs.SDL
   ( play,
-    renderSprite,
-    renderText,
+    render,
   )
 where
 
 import Apecs (System, ask, runWith)
 import qualified Apecs.SDL.Internal as Internal
 import Control.Monad.Extra (unless, when, whileM)
+import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Compose
 import qualified Data.Map as Map
 import Data.Text (Text)
@@ -31,30 +31,21 @@ draw r w drawSystem = do
   runWith w (drawSystem r)
   SDL.present r
 
-renderSprite :: (Integral p, Internal.Sprite a) => SDL.Renderer -> Internal.Point p -> a -> IO ()
-renderSprite r (V2 x y) s = renderTexture r t f (Internal.mkRect (fromIntegral x) (fromIntegral y) w h)
+render :: (MonadIO m, Integral p, Internal.Drawable a) => SDL.Renderer -> Internal.Point p -> a -> m ()
+render r (V2 x y) s = renderTexture r t f (Internal.mkRect (fromIntegral x) (fromIntegral y) w h)
   where
     (Internal.Texture t ti) = Internal.getTexture s
     size = V2 (SDL.textureWidth ti) (SDL.textureHeight ti)
     f = Internal.getFrame s
     (V2 w h) = maybe size (\(SDL.Rectangle _ size') -> size') f
 
-renderText :: (Integral a) => SDL.Renderer -> SDL.Font.Font -> Text -> Internal.Point a -> IO ()
-renderText r font text (V2 x y) = do
-  surface <- SDL.Font.blended font (V4 maxBound maxBound maxBound maxBound) text
-  texture <- SDL.createTextureFromSurface r surface
-  info <- SDL.queryTexture texture
-  let tw = SDL.textureWidth info
-      th = SDL.textureHeight info
-  renderTexture r texture Nothing (Internal.mkRect (fromIntegral x - tw `div` 2) (fromIntegral y) tw th)
-
 renderTexture ::
-  (Integral a) =>
+  (Integral a, MonadIO m) =>
   SDL.Renderer ->
   SDL.Texture ->
   Maybe (SDL.Rectangle a) ->
   SDL.Rectangle a ->
-  IO ()
+  m ()
 renderTexture r t mask pos =
   SDL.copy r t (fmap fromIntegral <$> mask) (Just $ fromIntegral <$> pos)
 

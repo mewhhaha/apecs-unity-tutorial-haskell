@@ -41,10 +41,11 @@ import Apecs
     set,
   )
 import Apecs.Experimental.Reactive
-import Apecs.SDL (play, renderSprite, renderText)
-import Apecs.SDL.Internal (ASheet, Sheet (..), Sprite, Texture, animate, linear, loadTexture, mkASheet, mkClips, mkPoint, mkRect, mkSheet)
+import Apecs.SDL (play, render)
+import Apecs.SDL.Internal (ASheet, Drawable, Sheet (..), Texture, animate, linear, loadTexture, mkASheet, mkClips, mkPoint, mkRect, mkSheet, mkTextElement)
 import Control.Arrow
 import Control.Monad (filterM, forM_, join, unless, void, when, zipWithM_)
+import Control.Monad.IO.Class (MonadIO)
 import qualified Control.Monad.State.Strict as State
 import qualified Creature.Player as Player
 import qualified Creature.Vampire as Vampire
@@ -318,13 +319,21 @@ step _ dt events = do
     stepState
   win <- (\(CLatest latest) -> any isPlayerWin latest) <$> get global
   if not win
-    then ask
-    else do
+    then thisLevel
+    else nextLevel
+  where
+    thisLevel :: System' World
+    thisLevel = ask
+    nextLevel :: System' World
+    nextLevel = do
       (CLevel level) <- get global
+      life <- cfold (\_ (_ :: CPlayer, CStat Stat {life}) -> life) 0
       lift $ do
         w <- initWorld
-        runWith w (initialize (level + 1) >> ask)
-  where
+        runWith w $ do
+          initialize (level + 1)
+          cmap $ \(_ :: CPlayer) -> Just (CStat Stat {life = life + 1})
+          ask
     getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
     getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
 
@@ -389,9 +398,11 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
       drawZombie zombie
     ]
   (V2 w h) <- StateVar.get $ SDL.Video.windowSize w
-  food <- cfold (\_ (CPlayer _, CStat Stat {life}) -> life) 0
-  let foodText = Text.pack ("Food " ++ show food)
-  whenJust (Map.lookup 16 font) $ \f -> lift $ renderText r f foodText (V2 (w `div` 2) (h - 30))
+  whenJust (Map.lookup 16 font) $ \f -> do
+    food <- cfold (\_ (CPlayer _, CStat Stat {life}) -> life) 0
+    let foodText = Text.pack ("Food " ++ show food)
+    el <- mkTextElement r f foodText
+    render r (V2 (w `div` 2) (h - 30)) el
   where
     playMusic :: ByteString.ByteString -> System' ()
     playMusic music = lift $ do
@@ -428,10 +439,10 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     interpolate (Linear t from to) = (fromIntegral <$> from) ^+^ (min (t / duration) 1 *^ (fromIntegral <$> (to ^-^ from)))
       where
         duration = 0.1
-    render :: forall s. (Sprite s) => (V2 Double, s) -> IO ()
-    render (p, a) = renderSprite r (toScreen p) a
-    cdraw :: forall c s. (Sprite s, Members World IO c, Get World IO c) => (c -> Maybe (Position, s)) -> System' ()
-    cdraw f = cfoldM (\acc c -> pure (acc >> whenJust (f c) (\(pos, s) -> render (fromIntegral <$> pos, s)))) mempty >>= lift
+    drawToScreen :: forall s. Drawable s => (V2 Double, s) -> System' ()
+    drawToScreen (p, a) = render r (toScreen p) a
+    cdraw :: forall c s. (Drawable s, Members World IO c, Get World IO c) => (c -> Maybe (Position, s)) -> System' ()
+    cdraw f = cmapM_ $ \c -> whenJust (f c) (\(pos, s) -> drawToScreen (fromIntegral <$> pos, s))
     drawSheet :: forall c. (Members World IO (Clip c), Get World IO (Clip c), Ord c) => Sheet c -> System' ()
     drawSheet s = cdraw $ \(Clip c, CPosition pos, _ :: Not CDead) ->
       Just (pos, (s {clip = Just c}))
@@ -439,33 +450,33 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     drawObstacle variants = cdraw $ \(CPosition pos, CObstacle variant, CStat Stat {life}, _ :: Not CDead) -> do
       sheet <- Map.lookup variant variants
       return (pos, sheet {clip = Just $ if life <= 1 then ODamaged else ONew})
-    drawCreature :: forall c. (Members World IO c, Get World IO c) => (Linear -> Double -> Double -> c -> IO ()) -> System' ()
-    drawCreature f = cmapM_ $ \(c :: c, _ :: Not CDead, CLinear lin, CAnimation time dur) -> lift $ f lin time dur c
+    drawCreature :: forall c. (Members World IO c, Get World IO c) => (Linear -> Double -> Double -> c -> System' ()) -> System' ()
+    drawCreature f = cmapM_ $ \(c :: c, _ :: Not CDead, CLinear lin, CAnimation time dur) -> f lin time dur c
     drawPlayer :: Env.Player -> System' ()
     drawPlayer Env.Player {idle, hurt, attack} = drawCreature @CPlayer $
       \lin time dur (CPlayer p) ->
-        let render' :: forall n. (KnownNat n, 1 <= n) => ASheet n -> IO ()
-            render' = render . (interpolate lin,) . linear time dur
+        let go :: forall n. (KnownNat n, 1 <= n) => ASheet n -> System' ()
+            go = drawToScreen . (interpolate lin,) . linear time dur
          in case listToMaybe p of
-              (Just PIdle) -> render' idle
-              (Just PHurt) -> render' hurt
-              (Just PAttack) -> render' attack
+              (Just PIdle) -> go idle
+              (Just PHurt) -> go hurt
+              (Just PAttack) -> go attack
     drawVampire :: Env.Vampire -> System' ()
     drawVampire Env.Vampire {idle, attack} = drawCreature @CVampire $
       \lin time dur (CVampire p) ->
-        let render' :: forall n. (KnownNat n, 1 <= n) => ASheet n -> IO ()
-            render' = render . (interpolate lin,) . linear time dur
+        let go :: forall n. (KnownNat n, 1 <= n) => ASheet n -> System' ()
+            go = drawToScreen . (interpolate lin,) . linear time dur
          in case p of
-              VIdle -> render' idle
-              VAttack -> render' attack
+              VIdle -> go idle
+              VAttack -> go attack
     drawZombie :: Env.Zombie -> System' ()
     drawZombie Env.Zombie {idle, attack} = drawCreature @CZombie $
       \lin time dur (CZombie p) ->
-        let render' :: forall n. (KnownNat n, 1 <= n) => ASheet n -> IO ()
-            render' = render . (interpolate lin,) . linear time dur
+        let go :: forall n. (KnownNat n, 1 <= n) => ASheet n -> System' ()
+            go = drawToScreen . (interpolate lin,) . linear time dur
          in case p of
-              ZIdle -> render' idle
-              ZAttack -> render' attack
+              ZIdle -> go idle
+              ZAttack -> go attack
 
 run :: World -> IO ()
 run w = do
