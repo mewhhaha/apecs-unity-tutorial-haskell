@@ -230,7 +230,6 @@ stepPlayer next =
       case attack of
         Just target -> do
           hurt target 1
-          whenM (hasAny @CEnemy [target]) (record EnemyHurt)
           whenM (hasAny @CObstacle [target]) (record ObstacleHurt)
           records [PlayerAttack]
           pure $ Just (CPlayer [PAttack])
@@ -249,14 +248,6 @@ stepAnimation dt = do
     \(CPlayer ps, CAnimation time duration) -> case (time >= duration, ps) of
       (True, a : rest@(b : _)) -> Right (CPlayer rest, Player.animate b)
       _ -> Left ()
-
-killEnemies :: System' ()
-killEnemies = cmapM $ \(CEnemy, CStat Stat {life}) ->
-  if life > 0
-    then pure $ Left ()
-    else do
-      record EnemyDie
-      pure $ Right CDead
 
 killObstacles :: System' ()
 killObstacles = cmapM $ \(CObstacle _, CStat Stat {life}) ->
@@ -320,7 +311,6 @@ step _ dt events = do
   shouldUpdate <- evalNext events
   whenJust shouldUpdate $ \next -> do
     stepPlayer next
-    killEnemies
     killObstacles
     targets <- getEntities @CPlayer
     stepItems targets
