@@ -139,7 +139,7 @@ initialize level = do
       ground = [V2 x y | x <- shrink 1 xs, y <- shrink 1 ys]
       start = V2 1 (last ys - 1)
       goal = V2 (last xs - 1) 1
-      spawnArea = [V2 x y | x <- shrink 1 xs, y <- shrink 1 ys, notElem (V2 x y) [start, goal]]
+      spawnArea = [V2 x y | x <- shrink 1 xs, y <- shrink 1 ys, V2 x y `notElem` [start, goal]]
       [zombies, vampires, sodas, fruit, obstacles] =
         flip State.evalState spawnArea $
           sequence [pick g 5, pick g 3, pick g 3, pick g 3, spread 10 g]
@@ -250,8 +250,8 @@ stepAnimation dt = do
       (True, a : rest@(b : _)) -> Right (CPlayer rest, Player.animate b)
       _ -> Left ()
 
-killObstacles :: System' ()
-killObstacles = cmapM $ \(CObstacle _, CStat Stat {life}) ->
+removeObstacles :: System' ()
+removeObstacles = cmapM $ \(CObstacle _, CStat Stat {life}) ->
   if life > 0
     then pure $ Left ()
     else do
@@ -312,7 +312,7 @@ step _ dt events = do
   shouldUpdate <- evalNext events
   whenJust shouldUpdate $ \next -> do
     stepPlayer next
-    killObstacles
+    removeObstacles
     targets <- getEntities @CPlayer
     stepItems targets
     stepEnemies targets

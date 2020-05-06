@@ -4,7 +4,7 @@ import Apecs
 import Control.Monad (when)
 import Data.Either (lefts)
 import qualified Env
-import Game.Component (CIsRunning (..), Direction (..))
+import Game.Component (Direction (..))
 import Game.World (System')
 import qualified SDL
 
@@ -25,11 +25,6 @@ isKeyDown scancode (SDL.KeyboardEvent e) = pressed && rightKey
     pressed = SDL.keyboardEventKeyMotion e == SDL.Pressed
     rightKey = scancode == SDL.keysymScancode (SDL.keyboardEventKeysym e)
 isKeyDown _ _ = False
-
-whenGameIsRunning :: System' () -> System' ()
-whenGameIsRunning s = do
-  isRunning <- (/= Stopped) <$> get global
-  when isRunning s
 
 movement :: Either Event SDL.Event -> Either Event SDL.Event
 movement e = do

@@ -7,7 +7,7 @@ module Apecs.SDL
 where
 
 import Apecs (System, ask, runWith)
-import qualified Apecs.SDL.Internal as Internal
+import Apecs.SDL.Internal (Drawable, Texture (..), getFrame, getTexture, isQuitEvent, mkRect, setHintQuality, withRenderer, withSDL, withSDLFont, withSDLImage, withWindow)
 import Control.Monad.Extra (unless, when, whileM)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Compose
@@ -31,12 +31,12 @@ draw r w drawSystem = do
   runWith w (drawSystem r)
   SDL.present r
 
-render :: (MonadIO m, Integral p, Internal.Drawable a) => SDL.Renderer -> Internal.Point p -> a -> m ()
-render r (V2 x y) s = renderTexture r t f (Internal.mkRect (fromIntegral x) (fromIntegral y) w h)
+render :: (MonadIO m, Integral p, Drawable a) => SDL.Renderer -> V2 p -> a -> m ()
+render r (V2 x y) s = renderTexture r t f (mkRect (fromIntegral x) (fromIntegral y) w h)
   where
-    (Internal.Texture t ti) = Internal.getTexture s
+    (Texture t ti) = getTexture s
     size = V2 (SDL.textureWidth ti) (SDL.textureHeight ti)
-    f = Internal.getFrame s
+    f = getFrame s
     (V2 w h) = maybe size (\(SDL.Rectangle _ size') -> size') f
 
 renderTexture ::
@@ -67,14 +67,14 @@ play ::
   (env -> SDL.Window -> SDL.Renderer -> System w ()) ->
   IO ()
 play world createEnv handleEvents stepSystem drawSystem =
-  Internal.withSDL
-    . Internal.withSDLImage
-    . Internal.withSDLFont
+  withSDL
+    . withSDLImage
+    . withSDLFont
     . SDL.Mixer.withAudio SDL.Mixer.defaultAudio 256
     $ do
-      Internal.setHintQuality
-      Internal.withWindow "My game" windowSize $ \w ->
-        Internal.withRenderer w $ \r -> do
+      setHintQuality
+      withWindow "My game" windowSize $ \w ->
+        withRenderer w $ \r -> do
           env <- createEnv r
           t <- SDL.time
           loop 0 world $
@@ -86,4 +86,4 @@ play world createEnv handleEvents stepSystem drawSystem =
                   curr
                   (stepSystem env dt as)
               draw r next (drawSystem env w)
-              return (any Internal.isQuitEvent events, next)
+              return (any isQuitEvent events, next)
