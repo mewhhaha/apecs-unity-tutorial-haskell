@@ -10,7 +10,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Apecs.SDL.Internal where
+module Engine.SDL.Internal where
 
 import Control.Arrow ((&&&))
 import Control.Monad (void)
@@ -39,7 +39,9 @@ class Drawable a where
   getTexture :: a -> Texture
   getFrame :: a -> Maybe (SDL.Rectangle CInt)
 
-newtype TextElement = TextElement Texture
+data XAlignment = XLeft | XCenter | XRight
+
+data TextElement = TextElement XAlignment Texture
 
 type Size (n :: Nat) = Proxy n
 
@@ -58,7 +60,7 @@ instance Drawable Texture where
 
 instance Drawable TextElement where
   getFrame _ = Nothing
-  getTexture (TextElement t) = t
+  getTexture (TextElement _ t) = t
 
 instance (Ord a, Eq a) => Drawable (Sheet a) where
   getFrame Sheet {clip, clips} = clip >>= (`Map.lookup` clips)
@@ -70,12 +72,12 @@ instance Drawable (ASheet a) where
       n = natVal frame
   getTexture = texture . sheet
 
-mkTextElement :: MonadIO m => SDL.Renderer -> SDL.Font.Font -> Text -> m TextElement
-mkTextElement r font text = do
+mkTextElement :: MonadIO m => SDL.Renderer -> SDL.Font.Font -> Text -> XAlignment -> m TextElement
+mkTextElement r font text alignment = do
   surface <- SDL.Font.blended font (V4 maxBound maxBound maxBound maxBound) text
   texture <- SDL.createTextureFromSurface r surface
   info <- SDL.queryTexture texture
-  return $ TextElement (mkTexture texture info)
+  return $ TextElement alignment (mkTexture texture info)
 
 mkTexture :: SDL.Texture -> SDL.TextureInfo -> Texture
 mkTexture = Texture

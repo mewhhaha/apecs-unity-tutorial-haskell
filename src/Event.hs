@@ -3,12 +3,13 @@ module Event where
 import Apecs
 import Control.Monad (when)
 import Data.Either (lefts)
+import Data.Maybe (mapMaybe)
 import qualified Env
 import Game.Component (Direction (..))
 import Game.World (System')
 import qualified SDL
 
-data Event = InputMove Direction | InputQuit
+data Event = InputMove Direction | InputQuit | AnyKeyPressed
 
 whenKeyPressed :: SDL.Scancode -> SDL.EventPayload -> System' () -> System' ()
 whenKeyPressed s e = when (isKeyPressed s e)
@@ -26,6 +27,14 @@ isKeyDown scancode (SDL.KeyboardEvent e) = pressed && rightKey
     rightKey = scancode == SDL.keysymScancode (SDL.keyboardEventKeysym e)
 isKeyDown _ _ = False
 
+isAnyKeyPressed :: SDL.Event -> Bool
+isAnyKeyPressed event = case SDL.eventPayload event of
+  (SDL.KeyboardEvent e) -> pressed && justPressed
+    where
+      justPressed = not (SDL.keyboardEventRepeat e)
+      pressed = SDL.keyboardEventKeyMotion e == SDL.Pressed
+  _ -> False
+
 movement :: Either Event SDL.Event -> Either Event SDL.Event
 movement e = do
   payload <- SDL.eventPayload <$> e
@@ -37,4 +46,6 @@ movement e = do
   e
 
 events :: Env.Env -> [SDL.Event] -> [Event]
-events _ es = lefts $ movement . Right <$> es
+events _ es = lefts (movement . Right <$> es) ++ anykey
+  where
+    anykey = if any isAnyKeyPressed es then [AnyKeyPressed] else mempty

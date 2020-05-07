@@ -6,10 +6,10 @@
 
 module Env where
 
-import Apecs.SDL.Internal (ASheet, Sheet, Texture, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
 import Control.Monad
 import qualified Data.ByteString as ByteString
 import qualified Data.Map as Map
+import Engine.SDL.Internal (ASheet, Sheet, Texture, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
 import Foreign.C.Types
 import GHC.Natural
 import GHC.TypeNats

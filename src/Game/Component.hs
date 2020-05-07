@@ -11,9 +11,9 @@ module Game.Component where
 
 import Apecs
 import Apecs.Experimental.Reactive
-import Apecs.SDL.Internal (Texture)
 import Data.Array
 import Data.List.NonEmpty (NonEmpty (..))
+import Engine.SDL.Internal (TextElement, Texture)
 import GHC.TypeNats
 import Linear
 import Linear.V2
@@ -43,7 +43,7 @@ data Zombie = ZIdle | ZAttack
 data Vampire = VIdle | VAttack
   deriving (Enum, Bounded)
 
-data Happened = PlayerAttack | PlayerMove | PlayerHurt | PlayerDie | PlayerWin | EnemyHurt | EnemyAttack | EnemyDie | SodaPicked | FruitPicked | ObstacleHurt | ObstacleDie
+data Happened = Restart | AteFood | PlayerAttack | PlayerMove | PlayerHurt Word | PlayerDie | PlayerWin | EnemyHurt | EnemyAttack | EnemyDie | SodaPicked Word | FruitPicked Word | ObstacleHurt | ObstacleDie
   deriving (Eq, Ord)
 
 data Prop = Soda | Fruit | Exit
@@ -170,15 +170,15 @@ instance Semigroup CLevel where (CLevel t1) <> (CLevel t2) = CLevel (t1 + t2)
 
 instance Monoid CLevel where mempty = CLevel 0
 
-data CIsRunning = Running | Paused | Stopped
+data CGame = LevelStart | GamePlay | GameOver
   deriving (Eq)
 
-instance Component CIsRunning where type Storage CIsRunning = Apecs.Global CIsRunning
+instance Component CGame where type Storage CGame = Apecs.Global CGame
 
-instance Semigroup CIsRunning where
+instance Semigroup CGame where
   _ <> next = next
 
-instance Monoid CIsRunning where mempty = Stopped
+instance Monoid CGame where mempty = LevelStart
 
 data CAnimation = CAnimation Double Double
 
@@ -192,16 +192,20 @@ instance Semigroup CLatest where (CLatest t1) <> (CLatest t2) = CLatest (t1 <> t
 
 instance Monoid CLatest where mempty = CLatest []
 
-newtype GameOverlay = GameOverlay Texture
+newtype GameOverlay = GameOverlay TextElement
 
-newtype LevelChangeOverlay = LevelChangeOverlay Texture
+newtype CGameOverlay = CGameOverlay GameOverlay
 
-data Overlay = Game GameOverlay | LevelChange
+instance Component CGameOverlay where type Storage CGameOverlay = Apecs.Unique CGameOverlay
 
-newtype COverlay = COverlay [Overlay]
+newtype LevelOverlay = LevelOverlay TextElement
 
-instance Component COverlay where type Storage COverlay = Apecs.Global COverlay
+newtype CLevelOverlay = CLevelOverlay LevelOverlay
 
-instance Semigroup COverlay where (COverlay t1) <> (COverlay t2) = COverlay (t1 <> t2)
+instance Component CLevelOverlay where type Storage CLevelOverlay = Apecs.Unique CLevelOverlay
 
-instance Monoid COverlay where mempty = COverlay []
+newtype DeathOverlay = DeathOverlay TextElement
+
+newtype CDeathOverlay = CDeathOverlay DeathOverlay
+
+instance Component CDeathOverlay where type Storage CDeathOverlay = Apecs.Unique CDeathOverlay

@@ -1,19 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Apecs.SDL
+module Engine.SDL
   ( play,
     render,
   )
 where
 
 import Apecs (System, ask, runWith)
-import Apecs.SDL.Internal (Drawable, Texture (..), getFrame, getTexture, isQuitEvent, mkRect, setHintQuality, withRenderer, withSDL, withSDLFont, withSDLImage, withWindow)
 import Control.Monad.Extra (unless, when, whileM)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Compose
 import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Engine.SDL.Internal (Drawable, Texture (..), getFrame, getTexture, isQuitEvent, mkRect, setHintQuality, withRenderer, withSDL, withSDLFont, withSDLImage, withWindow)
 import Foreign.C.Types
 import qualified SDL
 import SDL (($=), V2 (..), V4 (..))
@@ -23,13 +23,6 @@ import qualified SDL.Mixer
 
 windowSize :: Integral a => (a, a)
 windowSize = (640, 480)
-
-draw :: SDL.Renderer -> w -> (SDL.Renderer -> System w ()) -> IO ()
-draw r w drawSystem = do
-  SDL.rendererDrawColor r $= SDL.V4 maxBound maxBound maxBound maxBound
-  SDL.clear r
-  runWith w (drawSystem r)
-  SDL.present r
 
 render :: (MonadIO m, Integral p, Drawable a) => SDL.Renderer -> V2 p -> a -> m ()
 render r (V2 x y) s = renderTexture r t f (mkRect (fromIntegral x) (fromIntegral y) w h)
@@ -62,11 +55,13 @@ play ::
   -- | Event handling function
   (env -> [SDL.Event] -> as) ->
   -- | Stepping function
-  (env -> Double -> as -> System w w) ->
+  (env -> Double -> as -> System w ()) ->
   -- | Drawing function
   (env -> SDL.Window -> SDL.Renderer -> System w ()) ->
+  -- | Change function
+  (env -> System w w) ->
   IO ()
-play world createEnv handleEvents stepSystem drawSystem =
+play world createEnv handleEvents stepSystem drawSystem changeSystem =
   withSDL
     . withSDLImage
     . withSDLFont
@@ -84,6 +79,11 @@ play world createEnv handleEvents stepSystem drawSystem =
               next <-
                 runWith
                   curr
-                  (stepSystem env dt as)
-              draw r next (drawSystem env w)
+                  $ do
+                    stepSystem env dt as
+                    SDL.rendererDrawColor r $= SDL.V4 maxBound maxBound maxBound maxBound
+                    SDL.clear r
+                    drawSystem env w r
+                    SDL.present r
+                    changeSystem env
               return (any isQuitEvent events, next)

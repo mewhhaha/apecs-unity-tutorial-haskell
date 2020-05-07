@@ -41,8 +41,6 @@ import Apecs
     set,
   )
 import Apecs.Experimental.Reactive
-import Apecs.SDL (play, render)
-import Apecs.SDL.Internal (ASheet, Drawable, Sheet (..), Texture, animate, linear, loadTexture, mkASheet, mkClips, mkPoint, mkRect, mkSheet, mkTextElement)
 import Control.Arrow
 import Control.Monad (filterM, forM_, join, unless, void, when, zipWithM_)
 import Control.Monad.IO.Class (MonadIO)
@@ -61,13 +59,16 @@ import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.StateVar as StateVar
 import qualified Data.Text as Text
+import Engine.SDL (play, render)
+import Engine.SDL.Internal (ASheet, Drawable, Sheet (..), TextElement (..), Texture (..), XAlignment (..), animate, linear, loadTexture, mkASheet, mkClips, mkPoint, mkRect, mkSheet, mkTextElement)
 import qualified Env
 import Event (Event (..), events, isKeyDown)
 import GHC.TypeNats
 import Game.Component
 import Game.World (All, System', World, initWorld)
-import Linear ((*^), V2 (..), (^+^), (^-^))
+import Linear ((*^), V2 (..), V4 (..), (^+^), (^-^))
 import qualified SDL
+import qualified SDL.Font
 import qualified SDL.Mixer
 import qualified SDL.Video
 import System.FilePath.Posix ((</>))
@@ -216,6 +217,7 @@ entitiesAt pos = withReactive $ ixLookup (CPosition pos)
 stepPlayer :: Position -> System' ()
 stepPlayer next =
   cmapM $ \(CPlayer state, CPosition pos, CStat Stat {life}) -> do
+    record AteFood
     at <- entitiesAt next
     win <- hasAny @CGoal at
     attack <- getAny @(Not CPlayer, CStat) at
@@ -273,9 +275,10 @@ stepEnemies targets =
     occupied <- hasAny @(Not CPlayer, Not CGround) at
     case (playerAt, occupied) of
       (Just target, _) -> do
-        hurt target 10
+        let damage = 10
+        hurt target damage
         modify target $ \(CPlayer state) -> CPlayer (PHurt : state)
-        record PlayerHurt
+        record (PlayerHurt damage)
         record EnemyAttack
         pure $ Right (state ZAttack VAttack)
       (_, True) -> pure $ Right (state ZIdle VIdle)
@@ -283,8 +286,10 @@ stepEnemies targets =
 
 stepItems :: Map.Map Position Entity -> System' ()
 stepItems pickers = do
-  pick @CFruit FruitPicked 20
-  pick @CSoda SodaPicked 10
+  let fruit = 20
+      soda = 20
+  pick @CFruit (FruitPicked fruit) fruit
+  pick @CSoda (SodaPicked soda) soda
   where
     pick :: forall c. (Members World IO c, Get World IO c) => Happened -> Word -> System' ()
     pick happening i = cmapM $ \(_ :: c, CPosition pos, self :: Entity) ->
@@ -300,30 +305,33 @@ removeDead = cmap $ \CDead -> Not @All
 
 stepState :: System' ()
 stepState = do
+  (CLatest latest) <- get global
+  cmapM_ $ \(_ :: CPlayer, CStat Stat {life}) -> when (life <= 0) (record PlayerDie)
   cmap $ \(CPlayer state) -> let state' = reverse (PIdle : state) in Just (CPlayer state', Player.animate (head state'))
   cmap $ \(CZombie state) -> Just (Zombie.animate state)
   cmap $ \(CVampire state) -> Just (Vampire.animate state)
 
-step :: Env.Env -> Double -> [Event] -> System' World
-step _ dt events = do
-  removeDead
-  tick dt
-  stepAnimation dt
-  shouldUpdate <- evalNext events
-  whenJust shouldUpdate $ \next -> do
-    stepPlayer next
-    removeObstacles
-    targets <- getEntities @CPlayer
-    stepItems targets
-    stepEnemies targets
-    stepState
-  win <- (\(CLatest latest) -> any isPlayerWin latest) <$> get global
-  if not win
-    then thisLevel
-    else nextLevel
+change :: Env.Env -> System' World
+change _ = do
+  (CLatest latest) <- get global
+  let win = any isPlayerWin latest
+      restart = any isRestart latest
+      dead = any isPlayerDie latest
+  when dead $ set global GameOver
+  case (win, restart) of
+    (_, True) -> zeroLevel
+    (True, _) -> nextLevel
+    _ -> thisLevel
   where
     thisLevel :: System' World
     thisLevel = ask
+    zeroLevel :: System' World
+    zeroLevel =
+      lift $ do
+        w <- initWorld
+        runWith w $ do
+          initialize 0
+          ask
     nextLevel :: System' World
     nextLevel = do
       (CLevel level) <- get global
@@ -334,6 +342,26 @@ step _ dt events = do
           initialize (level + 1)
           cmap $ \(_ :: CPlayer) -> Just (CStat Stat {life = life + 1})
           ask
+
+step :: Env.Env -> Double -> [Event] -> System' ()
+step env dt events = do
+  removeDead
+  tick dt
+  stepAnimation dt
+  game <- get global
+  case game of
+    GamePlay -> do
+      shouldUpdate <- evalNext events
+      whenJust shouldUpdate $ \next -> do
+        stepPlayer next
+        removeObstacles
+        targets <- getEntities @CPlayer
+        stepItems targets
+        stepEnemies targets
+        stepState
+    LevelStart -> unless (null events) $ set global GamePlay
+    GameOver -> unless (null events) $ record Restart
+  where
     getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
     getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
 
@@ -362,11 +390,11 @@ isEnemyAttack EnemyAttack = True
 isEnemyAttack _ = False
 
 isSodaPicked :: Happened -> Bool
-isSodaPicked SodaPicked = True
+isSodaPicked (SodaPicked _) = True
 isSodaPicked _ = False
 
 isFruitPicked :: Happened -> Bool
-isFruitPicked FruitPicked = True
+isFruitPicked (FruitPicked _) = True
 isFruitPicked _ = False
 
 isEnemyDie :: Happened -> Bool
@@ -376,6 +404,92 @@ isEnemyDie _ = False
 isPlayerWin :: Happened -> Bool
 isPlayerWin PlayerWin = True
 isPlayerWin _ = False
+
+isPlayerDie :: Happened -> Bool
+isPlayerDie PlayerDie = True
+isPlayerDie _ = False
+
+isRestart :: Happened -> Bool
+isRestart Restart = True
+isRestart _ = False
+
+collectFood :: [Happened] -> Maybe Integer
+collectFood =
+  maybeIf (/= 0)
+    . foldl'
+      ( \acc -> \case
+          FruitPicked x -> acc + fromIntegral x
+          SodaPicked x -> acc + fromIntegral x
+          PlayerHurt x -> acc - fromIntegral x
+          _ -> acc
+      )
+      0
+
+getTextOffset :: Integral i => TextElement -> i
+getTextOffset (TextElement alignment (Texture _ ti)) = case alignment of
+  XLeft -> 0
+  XCenter -> - tw `div` 2
+  XRight -> - tw
+  where
+    tw = fromIntegral $ SDL.textureWidth ti
+
+stepUI :: SDL.Renderer -> Map.Map SDL.Font.PointSize SDL.Font.Font -> System' ()
+stepUI r font = do
+  updateGameOverlay
+  updateLevelOverlay
+  updateDeathOverlay
+  where
+    (Just f) = Map.lookup 16 font
+    updateGameOverlay :: System' ()
+    updateGameOverlay = do
+      (CLatest latest) <- get global
+      let shouldUpdate = (not . null) latest
+      uninitialized <- cfold (\_ (_ :: CGameOverlay) -> False) True
+      updated <- do
+        food <- cfold (\_ (CPlayer _, CStat Stat {life}) -> life) 0
+        let prefix = (\x -> "(" <> (if x >= 0 then "+" else mempty) <> show x <> ")") <$> collectFood latest
+            foodText = Text.pack (fromMaybe mempty prefix <> " Food " <> show food)
+        el <- mkTextElement r f foodText XCenter
+        pure $ CGameOverlay (GameOverlay el)
+      when (shouldUpdate || uninitialized) . void $ newEntity updated
+    updateLevelOverlay :: System' ()
+    updateLevelOverlay = do
+      uninitialized <- cfold (\_ (_ :: CLevelOverlay) -> False) True
+      when uninitialized $ do
+        (CLevel level) <- get global
+        let levelText = Text.pack ("Level " <> show level)
+        el <- mkTextElement r f levelText XCenter
+        void $ newEntity (CLevelOverlay (LevelOverlay el))
+    updateDeathOverlay :: System' ()
+    updateDeathOverlay = do
+      (CLatest latest) <- get global
+      when (any isPlayerDie latest) $ do
+        (CLevel level) <- get global
+        let deathText = Text.pack ("You starved to death on level " <> show level)
+        el <- mkTextElement r f deathText XCenter
+        void $ newEntity (CDeathOverlay (DeathOverlay el))
+
+drawUI :: SDL.Window -> SDL.Renderer -> System' ()
+drawUI w r = do
+  screenSize@(V2 sw sh) <- StateVar.get $ SDL.Video.windowSize w
+  cmapM_ $ \(CGameOverlay (GameOverlay el), game :: CGame) -> when (isGamePlay game) (renderText (sw `div` 2, sh - 23) el)
+  cmapM_ $ \(CLevelOverlay (LevelOverlay el), game :: CGame) -> when (isLevelStart game) (textOnBlack screenSize el)
+  cmapM_ $ \(CDeathOverlay (DeathOverlay el), game :: CGame) -> when (isGameOver game) (textOnBlack screenSize el)
+  where
+    isLevelStart LevelStart = True
+    isLevelStart _ = False
+    isGameOver GameOver = True
+    isGameOver _ = False
+    isGamePlay GamePlay = True
+    isGamePlay _ = False
+    textOnBlack :: Integral i => V2 i -> TextElement -> System' ()
+    textOnBlack (V2 sw sh) el = do
+      let black = V4 0 0 0 0
+      SDL.rendererDrawColor r SDL.$= black
+      SDL.clear r
+      renderText (sw `div` 2, sh `div` 2) el
+    renderText :: (Integral i, MonadIO m) => (i, i) -> TextElement -> m ()
+    renderText (x, y) el = render r (V2 (x + fromIntegral (getTextOffset el)) y) el
 
 draw :: Env.Env -> SDL.Window -> SDL.Renderer -> System' ()
 draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, prop, misc, font} w r = do
@@ -397,12 +511,8 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
       drawVampire vampire,
       drawZombie zombie
     ]
-  (V2 w h) <- StateVar.get $ SDL.Video.windowSize w
-  whenJust (Map.lookup 16 font) $ \f -> do
-    food <- cfold (\_ (CPlayer _, CStat Stat {life}) -> life) 0
-    let foodText = Text.pack ("Food " ++ show food)
-    el <- mkTextElement r f foodText
-    render r (V2 (w `div` 2) (h - 30)) el
+  stepUI r font
+  drawUI w r
   where
     playMusic :: ByteString.ByteString -> System' ()
     playMusic music = lift $ do
@@ -479,4 +589,4 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
 run :: World -> IO ()
 run w = do
   w' <- runWith w (initialize 0 >> ask)
-  play w' Env.resources events step draw
+  play w' Env.resources events step draw change

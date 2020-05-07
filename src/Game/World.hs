@@ -20,7 +20,7 @@ makeWorld
   [ ''CPosition,
     ''CPlayer,
     ''CTime,
-    ''CIsRunning,
+    ''CGame,
     ''CAnimation,
     ''CGround,
     ''CWall,
@@ -36,7 +36,10 @@ makeWorld
     ''CDead,
     ''CLinear,
     ''CLevel,
-    ''CLatest
+    ''CLatest,
+    ''CGameOverlay,
+    ''CLevelOverlay,
+    ''CDeathOverlay
   ]
 
 type System' a = System World a
