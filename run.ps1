@@ -1,4 +1,5 @@
-stack build
-$GAME_DIR = stack path --local-install-root
-& $GAME_DIR\bin\game-exe.exe
+stack build --copy-bins --local-bin-path game
+Push-Location game
+./game-exe.exe
+Pop-Location
 

@@ -39,7 +39,7 @@ enter :: Either Event SDL.Event -> Either Event SDL.Event
 enter e = do
   payload <- SDL.eventPayload <$> e
   let down c r = when (isKeyDown c payload) (Left r)
-  down SDL.ScancodeReturn EnterPressed
+  mapM_ (`down` EnterPressed) [SDL.ScancodeReturn, SDL.ScancodeReturn2, SDL.ScancodeKPEnter]
   e
 
 events :: Env.Env -> [SDL.Event] -> [Event]

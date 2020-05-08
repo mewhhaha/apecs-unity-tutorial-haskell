@@ -166,6 +166,8 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
   stepUI r font
   drawUI w r
   where
+    volume :: SDL.Mixer.Volume
+    volume = 20
     playMusic :: ByteString -> System' ()
     playMusic music = lift $ do
       SDL.Mixer.setMusicVolume 20
@@ -175,7 +177,7 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     playSound ch chunks = do
       g <- lift newStdGen
       let randomIndex = fst (randomR (0, length chunks - 1) g)
-      SDL.Mixer.setVolume 20 (0 :: SDL.Mixer.Channel)
+      SDL.Mixer.setVolume volume ch
       void $ SDL.Mixer.playOn ch SDL.Mixer.Once (chunks !! randomIndex)
     playerSound, miscSound, enemySound :: SDL.Mixer.Channel
     playerSound = 0
