@@ -44,7 +44,7 @@ data Player
 
 data Misc = Misc {sfxSoda :: [SDL.Mixer.Chunk], sfxFruit :: [SDL.Mixer.Chunk]}
 
-data Enemy = Enemy {sfxAttack :: SDL.Mixer.Chunk, sfxDie :: SDL.Mixer.Chunk}
+newtype Enemy = Enemy {sfxAttack :: [SDL.Mixer.Chunk]}
 
 data Env
   = Env
@@ -98,8 +98,7 @@ resources r = do
   sfxSoda <- loadAudios ["scavengers_soda1.ogg", "scavengers_soda2.ogg"]
   sfxFruit <- loadAudios ["scavengers_fruit1.aif", "scavengers_fruit2.aif"]
   sfxChop <- loadAudios ["scavengers_chop1.ogg", "scavengers_chop2.ogg"]
-  sfxEnemyAttack <- loadAudio "scavengers_enemy1.aif"
-  sfxEnemyDie <- loadAudio "scavengers_enemy2.aif"
+  sfxEnemyAttack <- loadAudios ["scavengers_enemy1.aif", "scavengers_enemy2.aif"]
   sfxMusic <- ByteString.readFile ("resources" </> "audio" </> "scavengers_music.ogg")
   sfxDie <- loadAudio "scavengers_die.aif"
   pure
@@ -115,7 +114,7 @@ resources r = do
             { sfxSoda = sfxSoda,
               sfxFruit = sfxFruit
             },
-        enemy = Env.Enemy {sfxAttack = sfxEnemyAttack, sfxDie = sfxEnemyDie},
+        enemy = Env.Enemy {sfxAttack = sfxEnemyAttack},
         player =
           Env.Player
             { attack = playerAttack,

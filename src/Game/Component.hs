@@ -43,7 +43,7 @@ data Zombie = ZIdle | ZAttack
 data Vampire = VIdle | VAttack
   deriving (Enum, Bounded)
 
-data Happened = Restart | AteFood | PlayerAttack | PlayerMove | PlayerHurt Word | PlayerDie | PlayerWin | EnemyHurt | EnemyAttack | EnemyDie | SodaPicked Word | FruitPicked Word | ObstacleHurt | ObstacleDie
+data Happened = Restart | AteFood | PlayerAttack | PlayerMove | PlayerHurt Word | PlayerDie | PlayerWin | EnemyHurt | EnemyAttack | SodaPicked Word | FruitPicked Word | ObstacleHurt | ObstacleDie
   deriving (Eq, Ord)
 
 data Prop = Soda | Fruit | Exit

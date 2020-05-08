@@ -397,10 +397,6 @@ isFruitPicked :: Happened -> Bool
 isFruitPicked (FruitPicked _) = True
 isFruitPicked _ = False
 
-isEnemyDie :: Happened -> Bool
-isEnemyDie EnemyDie = True
-isEnemyDie _ = False
-
 isPlayerWin :: Happened -> Bool
 isPlayerWin PlayerWin = True
 isPlayerWin _ = False
@@ -501,7 +497,6 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
   when (any isEnemyAttack latest) (playEnemyAttack enemy)
   when (any isSodaPicked latest) (playSoda misc)
   when (any isFruitPicked latest) (playFruit misc)
-  when (any isEnemyDie latest) (playEnemyDie enemy)
   sequence_
     [ drawSheet ground,
       drawSheet wall,
@@ -534,9 +529,7 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     playChop :: Env.Player -> System' ()
     playChop Env.Player {sfxChop} = playSound playerSound sfxChop
     playEnemyAttack :: Env.Enemy -> System' ()
-    playEnemyAttack Env.Enemy {sfxAttack} = playSound enemySound [sfxAttack]
-    playEnemyDie :: Env.Enemy -> System' ()
-    playEnemyDie Env.Enemy {sfxDie} = playSound miscSound [sfxDie]
+    playEnemyAttack Env.Enemy {sfxAttack} = playSound enemySound sfxAttack
     playSoda :: Env.Misc -> System' ()
     playSoda Env.Misc {sfxSoda} = playSound miscSound sfxSoda
     playFruit :: Env.Misc -> System' ()
