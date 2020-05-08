@@ -189,7 +189,6 @@ stepPlayer next =
       case attack of
         Just target -> do
           hurt target 1
-          whenM (hasAny @CObstacle [target]) (record ObstacleHurt)
           record PlayerAttack
           pure $ Just (CPlayer [PAttack])
         Nothing -> pure $ Just (CPlayer [])
