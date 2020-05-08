@@ -9,7 +9,8 @@ import Game.Component (Direction (..))
 import Game.World (System')
 import qualified SDL
 
-data Event = InputMove Direction | InputQuit | AnyKeyPressed
+data Event = InputMove Direction | InputQuit | EnterPressed
+  deriving (Eq)
 
 whenKeyPressed :: SDL.Scancode -> SDL.EventPayload -> System' () -> System' ()
 whenKeyPressed s e = when (isKeyPressed s e)
@@ -27,14 +28,6 @@ isKeyDown scancode (SDL.KeyboardEvent e) = pressed && rightKey
     rightKey = scancode == SDL.keysymScancode (SDL.keyboardEventKeysym e)
 isKeyDown _ _ = False
 
-isAnyKeyPressed :: SDL.Event -> Bool
-isAnyKeyPressed event = case SDL.eventPayload event of
-  (SDL.KeyboardEvent e) -> pressed && justPressed
-    where
-      justPressed = not (SDL.keyboardEventRepeat e)
-      pressed = SDL.keyboardEventKeyMotion e == SDL.Pressed
-  _ -> False
-
 movement :: Either Event SDL.Event -> Either Event SDL.Event
 movement e = do
   payload <- SDL.eventPayload <$> e
@@ -45,7 +38,12 @@ movement e = do
   down SDL.ScancodeDown (InputMove South)
   e
 
+enter :: Either Event SDL.Event -> Either Event SDL.Event
+enter e = do
+  payload <- SDL.eventPayload <$> e
+  let down c r = when (isKeyDown c payload) (Left r)
+  down SDL.ScancodeReturn EnterPressed
+  e
+
 events :: Env.Env -> [SDL.Event] -> [Event]
-events _ es = lefts (movement . Right <$> es) ++ anykey
-  where
-    anykey = if any isAnyKeyPressed es then [AnyKeyPressed] else mempty
+events _ es = lefts (enter . movement . Right <$> es)

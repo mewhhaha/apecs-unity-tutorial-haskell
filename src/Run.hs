@@ -359,8 +359,8 @@ step env dt events = do
         stepItems targets
         stepEnemies targets
         stepState
-    LevelStart -> unless (null events) $ set global GamePlay
-    GameOver -> unless (null events) $ record Restart
+    LevelStart -> when (EnterPressed `elem` events) $ set global GamePlay
+    GameOver -> when (EnterPressed `elem` events) $ record Restart
   where
     getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
     getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
@@ -445,7 +445,7 @@ stepUI r font = do
         food <- cfold (\_ (CPlayer _, CStat Stat {life}) -> life) 0
         let prefix = (\x -> "(" <> (if x >= 0 then "+" else mempty) <> show x <> ")") <$> collectFood latest
             foodText = Text.pack (fromMaybe mempty prefix <> " Food " <> show food)
-        el <- mkTextElement r f foodText XCenter
+        el <- mkTextElement r f XCenter foodText
         pure $ CGameOverlay (GameOverlay el)
       when (shouldUpdate || uninitialized) . void $ newEntity updated
     updateLevelOverlay :: System' ()
@@ -454,23 +454,25 @@ stepUI r font = do
       when uninitialized $ do
         (CLevel level) <- get global
         let levelText = Text.pack ("Level " <> show level)
-        el <- mkTextElement r f levelText XCenter
-        void $ newEntity (CLevelOverlay (LevelOverlay el))
+            enterText = Text.pack "Press [Enter]"
+        els <- mapM (mkTextElement r f XCenter) [levelText, enterText]
+        void $ newEntity (CLevelOverlay els)
     updateDeathOverlay :: System' ()
     updateDeathOverlay = do
       (CLatest latest) <- get global
       when (any isPlayerDie latest) $ do
         (CLevel level) <- get global
         let deathText = Text.pack ("You starved to death on level " <> show level)
-        el <- mkTextElement r f deathText XCenter
-        void $ newEntity (CDeathOverlay (DeathOverlay el))
+            enterText = Text.pack "Press [Enter]"
+        els <- mapM (mkTextElement r f XCenter) [deathText, enterText]
+        void $ newEntity (CDeathOverlay els)
 
 drawUI :: SDL.Window -> SDL.Renderer -> System' ()
 drawUI w r = do
   screenSize@(V2 sw sh) <- StateVar.get $ SDL.Video.windowSize w
   cmapM_ $ \(CGameOverlay (GameOverlay el), game :: CGame) -> when (isGamePlay game) (renderText (sw `div` 2, sh - 23) el)
-  cmapM_ $ \(CLevelOverlay (LevelOverlay el), game :: CGame) -> when (isLevelStart game) (textOnBlack screenSize el)
-  cmapM_ $ \(CDeathOverlay (DeathOverlay el), game :: CGame) -> when (isGameOver game) (textOnBlack screenSize el)
+  cmapM_ $ \(CLevelOverlay els, game :: CGame) -> when (isLevelStart game) $ textOnBlack screenSize els
+  cmapM_ $ \(CDeathOverlay els, game :: CGame) -> when (isGameOver game) $ textOnBlack screenSize els
   where
     isLevelStart LevelStart = True
     isLevelStart _ = False
@@ -478,14 +480,23 @@ drawUI w r = do
     isGameOver _ = False
     isGamePlay GamePlay = True
     isGamePlay _ = False
-    textOnBlack :: Integral i => V2 i -> TextElement -> System' ()
-    textOnBlack (V2 sw sh) el = do
+    getTextHeight (TextElement _ (Texture _ ti)) = SDL.textureHeight ti
+    renderText :: (Integral i, MonadIO m) => (i, i) -> TextElement -> m ()
+    renderText (x, y) el = render r (V2 (x + fromIntegral (getTextOffset el)) y) el
+    clearBlack :: System' ()
+    clearBlack = do
       let black = V4 0 0 0 0
       SDL.rendererDrawColor r SDL.$= black
       SDL.clear r
-      renderText (sw `div` 2, sh `div` 2) el
-    renderText :: (Integral i, MonadIO m) => (i, i) -> TextElement -> m ()
-    renderText (x, y) el = render r (V2 (x + fromIntegral (getTextOffset el)) y) el
+    rows :: forall i. Integral i => V2 i -> [TextElement] -> System' ()
+    rows (V2 sw sh) = zipWithM_ (\n -> row <$> fromIntegral . (n *) . getTextHeight <*> id) [0 ..]
+      where
+        row :: i -> TextElement -> System' ()
+        row rowOffset = renderText (sw `div` 2, sh `div` 2 + rowOffset)
+    textOnBlack :: Integral i => V2 i -> [TextElement] -> System' ()
+    textOnBlack screenSize els = do
+      clearBlack
+      rows screenSize els
 
 draw :: Env.Env -> SDL.Window -> SDL.Renderer -> System' ()
 draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, prop, misc, font} w r = do

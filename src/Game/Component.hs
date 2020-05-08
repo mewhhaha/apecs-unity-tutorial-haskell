@@ -198,14 +198,10 @@ newtype CGameOverlay = CGameOverlay GameOverlay
 
 instance Component CGameOverlay where type Storage CGameOverlay = Apecs.Unique CGameOverlay
 
-newtype LevelOverlay = LevelOverlay TextElement
-
-newtype CLevelOverlay = CLevelOverlay LevelOverlay
+newtype CLevelOverlay = CLevelOverlay [TextElement]
 
 instance Component CLevelOverlay where type Storage CLevelOverlay = Apecs.Unique CLevelOverlay
 
-newtype DeathOverlay = DeathOverlay TextElement
-
-newtype CDeathOverlay = CDeathOverlay DeathOverlay
+newtype CDeathOverlay = CDeathOverlay [TextElement]
 
 instance Component CDeathOverlay where type Storage CDeathOverlay = Apecs.Unique CDeathOverlay

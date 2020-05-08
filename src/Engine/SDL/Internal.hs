@@ -72,8 +72,8 @@ instance Drawable (ASheet a) where
       n = natVal frame
   getTexture = texture . sheet
 
-mkTextElement :: MonadIO m => SDL.Renderer -> SDL.Font.Font -> Text -> XAlignment -> m TextElement
-mkTextElement r font text alignment = do
+mkTextElement :: MonadIO m => SDL.Renderer -> SDL.Font.Font -> XAlignment -> Text -> m TextElement
+mkTextElement r font alignment text = do
   surface <- SDL.Font.blended font (V4 maxBound maxBound maxBound maxBound) text
   texture <- SDL.createTextureFromSurface r surface
   info <- SDL.queryTexture texture
