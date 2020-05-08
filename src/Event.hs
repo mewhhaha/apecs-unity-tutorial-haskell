@@ -1,4 +1,4 @@
-module Event where
+module Event (events, Event (..)) where
 
 import Apecs
 import Control.Monad (when)
@@ -11,9 +11,6 @@ import qualified SDL
 
 data Event = InputMove Direction | InputQuit | EnterPressed
   deriving (Eq)
-
-whenKeyPressed :: SDL.Scancode -> SDL.EventPayload -> System' () -> System' ()
-whenKeyPressed s e = when (isKeyPressed s e)
 
 isKeyPressed :: SDL.Scancode -> SDL.EventPayload -> Bool
 isKeyPressed sc ke@(SDL.KeyboardEvent e) = justPressed && isKeyDown sc ke

@@ -34,7 +34,7 @@ makeWorld
     ''CFruit,
     ''CSoda,
     ''CDead,
-    ''CLinear,
+    ''CInterpolate,
     ''CLevel,
     ''CLatest,
     ''CGameOverlay,
@@ -63,7 +63,7 @@ type All =
     ),
     ( CVampire,
       CZombie,
-      CLinear,
+      CInterpolate,
       CStat,
       CFruit
     )

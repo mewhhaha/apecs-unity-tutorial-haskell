@@ -1,11 +1,9 @@
-module Creature.Player (new, idle, attack, hurt, animate) where
+module Creature.Player (new, animate) where
 
 import Apecs
 import Control.Monad (void)
-import Data.List.NonEmpty (NonEmpty (..))
 import Game.Component
 import Game.World
-import Linear (V2)
 
 idle = CAnimation 0 0.5
 
@@ -18,4 +16,4 @@ animate PAttack = attack
 animate PIdle = idle
 
 new :: Position -> System' ()
-new position = void $ newEntity (CPlayer [PIdle], CStat Stat {life = 100}, CPosition position, CLinear (Linear 0 position position), idle)
+new position = void $ newEntity (CPlayer [PIdle], CStat Stat {life = 100}, CPosition position, CInterpolate (Interpolate 0 position position), idle)

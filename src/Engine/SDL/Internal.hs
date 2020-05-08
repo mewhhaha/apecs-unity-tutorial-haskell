@@ -15,17 +15,15 @@ module Engine.SDL.Internal where
 import Control.Arrow ((&&&))
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
-import Data.Fixed
+import Data.Fixed (mod')
 import Data.Map.Strict as Map
-import Data.Maybe
-import Data.Proxy
+import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Type.Equality ((:~:) (Refl))
-import Foreign.C.Types
-import GHC.Natural
+import Foreign.C.Types (CInt)
+import GHC.Natural (Natural)
 import GHC.TypeLits.Compare (isLE)
 import GHC.TypeNats
-import Language.Haskell.TH
 import Linear (V2 (..), V4 (..))
 import qualified SDL
 import SDL (($=))

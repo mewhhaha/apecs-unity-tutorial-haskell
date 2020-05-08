@@ -6,15 +6,10 @@ module Engine.SDL
   )
 where
 
-import Apecs (System, ask, runWith)
-import Control.Monad.Extra (unless, when, whileM)
+import Apecs (System, runWith)
 import Control.Monad.IO.Class (MonadIO)
-import Data.Functor.Compose
 import qualified Data.Map as Map
-import Data.Text (Text)
-import qualified Data.Text as Text
 import Engine.SDL.Internal (Drawable, Texture (..), getFrame, getTexture, isQuitEvent, mkRect, setHintQuality, withRenderer, withSDL, withSDLFont, withSDLImage, withWindow)
-import Foreign.C.Types
 import qualified SDL
 import SDL (($=), V2 (..), V4 (..))
 import qualified SDL.Font

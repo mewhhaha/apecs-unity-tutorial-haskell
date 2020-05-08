@@ -1,11 +1,9 @@
-module Creature.Vampire (idle, new, attack, animate) where
+module Creature.Vampire (new, animate) where
 
 import Apecs
 import Control.Monad (void)
-import Data.List.NonEmpty (NonEmpty (..))
 import Game.Component
 import Game.World
-import Linear (V2)
 
 idle = CAnimation 0 0.5
 
@@ -15,4 +13,4 @@ animate VIdle = idle
 animate VAttack = attack
 
 new :: Position -> System' ()
-new position = void $ newEntity (CEnemy, CVampire VIdle, idle, CLinear (Linear 0 position position), CPosition position)
+new position = void $ newEntity (CEnemy, CVampire VIdle, idle, CInterpolate (Interpolate 0 position position), CPosition position)

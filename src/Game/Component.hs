@@ -10,14 +10,11 @@
 module Game.Component where
 
 import Apecs
-import Apecs.Experimental.Reactive
-import Data.Array
-import Data.List.NonEmpty (NonEmpty (..))
+import Apecs.Experimental.Reactive (IxMap, Reactive)
+import Data.Array (Ix)
 import Engine.SDL.Internal (TextElement, Texture)
-import GHC.TypeNats
-import Linear
-import Linear.V2
-import System.Random
+import Linear (V2 (..))
+import System.Random (Random, RandomGen, random, randomR)
 
 defaultEnumRandomR :: (Enum a, RandomGen g) => (a, a) -> g -> (a, g)
 defaultEnumRandomR (lo, hi) g = (toEnum i, g')
@@ -76,7 +73,7 @@ instance Random Obstacle where
 
 type Position = V2 Int
 
-data Linear = Linear Double Position Position
+data Interpolate = Interpolate Double Position Position
 
 newtype Stat
   = Stat
@@ -142,9 +139,9 @@ newtype CObstacle = CObstacle Obstacle
 
 instance Component CObstacle where type Storage CObstacle = Apecs.Map CObstacle
 
-newtype CLinear = CLinear Linear
+newtype CInterpolate = CInterpolate Interpolate
 
-instance Component CLinear where type Storage CLinear = Apecs.Map CLinear
+instance Component CInterpolate where type Storage CInterpolate = Apecs.Map CInterpolate
 
 type CProp = Clip Prop
 

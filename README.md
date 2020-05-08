@@ -1,10 +1,21 @@
-# Unity Tutorial in Haskell with Apecs and sdl2
+# Unity Tutorial Project in Haskell with Apecs and SDL2
 
-Problems
+This is a project loosely based on the Unity 2D Roguelike tutorial. Assets are from [https://learn.unity.com/project/2d-roguelike-tutorial](https://learn.unity.com/project/2d-roguelike-tutorial). It is built upon the ECS [apecs](https://hackage.haskell.org/package/apecs) for game logic and [sdl2](https://www.libsdl.org/download-2.0.php) for window management, images, audio and fonts.
 
-- Some .aif files wouldn't work so converted them to ogg
-- Because of https://github.com/haskell-game/sdl2-mixer/issues/5
-  / inspiration mallRL SDL2 tutoprial
+## Issues during development
+
+- Some `.aif` files wouldn't work so converted them to `ogg`
+- Had issues described in [https://github.com/haskell-game/sdl2-mixer/issues/5](https://github.com/haskell-game/sdl2-mixer/issues/5) and solved it the same way, using a `Bytestring` instead of `Music`
+
+## Inspiration
+
+[https://nmaehlmann.itch.io/mallrl](https://nmaehlmann.itch.io/mallrl)
+
+- Good example on how to use `apecs` and `SDL2` in a game
+
+[https://lazyfoo.net/tutorials/SDL/](https://lazyfoo.net/tutorials/SDL/)
+
+- Tutorials on how to use SDL2
 
 ## Building on Windows
 
@@ -14,36 +25,7 @@ Problems
 
 `stack exec -- pacman -S mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2`
 
-### 2. Edit stack.yaml and remove integersimple ghc
+### 3. Build and run
 
-The current code uses a custom compiled ghc for license reasons (see: https://ro-che.info/articles/2017-03-10-haskell-without-gmp). Since you may only compile the game for private use, you can comment out the following lines in the `stack.yaml`
-
-```
-# ghc-variant: integersimple
-
-# setup-info:
-#   ghc:
-#     windows64-integersimple:
-#       8.6.5:
-#           url: "C:/Users/Nikolas/Downloads/ghc-8.6.5-x86_64-unknown-mingw32.tar.xz"
-```
-
-and
-
-```
-# flags:
-#   # text:
-#   #   integer-simple: true
-#   hashable:
-#     integer-gmp: false
-#   scientific:
-#     integer-simple: true
-#   integer-logarithms:
-#     integer-gmp: false
-```
-
-### 3. Build and install via stack:
-
-`stack install`
-
-`stack run`
+`stack build --copy-bins --local-bin-path game`  
+run `game-exe`

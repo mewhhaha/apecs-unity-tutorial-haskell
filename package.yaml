@@ -8,28 +8,24 @@ library:
     - apecs
     - linear
     - containers
-    - astar
     - random
-    - extra
     - mtl
     - array
     - filepath
     - bytestring
-    - template-haskell
     - typelits-witnesses
     - text
     - StateVar
-copyright: 2020 Author name here
-maintainer: example@example.com
+copyright: 2020 Jacob Torrång
+maintainer: kopatheonlyone@hotmail.com
 dependencies:
   - base >= 4.7 && < 5
 name: game
 version: 0.1.0.0
 extra-source-files:
   - README.md
-  - ChangeLog.md
-author: Author name here
-github: githubuser/game
+author: mewhhaha
+github: mewhhaha/apecs-unity-tutorial-haskell
 license: null
 executables:
   game-exe:
@@ -43,4 +39,4 @@ executables:
       - -Wall
     dependencies:
       - game
-description: Please see the README on GitHub at <https://github.com/githubuser/mall#readme>
+description: Please see the README on GitHub at <https://github.com/mewhhaha/apecs-unity-tutorial-haskell#readme>
