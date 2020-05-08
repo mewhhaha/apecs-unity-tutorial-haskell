@@ -13,4 +13,4 @@ animate VIdle = idle
 animate VAttack = attack
 
 new :: Position -> System' ()
-new position = void $ newEntity (CEnemy, CVampire VIdle, idle, CInterpolate (Interpolate 0 position position), CPosition position)
+new position = void $ newEntity (CEnemy, CVampire VIdle, idle, CMove 0 position position, CPosition position)

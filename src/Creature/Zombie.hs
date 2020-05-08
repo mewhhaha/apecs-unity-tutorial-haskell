@@ -13,4 +13,4 @@ animate ZIdle = idle
 animate ZAttack = attack
 
 new :: Position -> System' ()
-new position = void $ newEntity (CEnemy, CZombie ZIdle, idle, CInterpolate (Interpolate 0 position position), CPosition position)
+new position = void $ newEntity (CEnemy, CZombie ZIdle, idle, CMove 0 position position, CPosition position)

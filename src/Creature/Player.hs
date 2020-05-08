@@ -16,4 +16,4 @@ animate PAttack = attack
 animate PIdle = idle
 
 new :: Position -> System' ()
-new position = void $ newEntity (CPlayer [PIdle], CStat Stat {life = 100}, CPosition position, CInterpolate (Interpolate 0 position position), idle)
+new position = void $ newEntity (CPlayer [PIdle], CStat Stat {life = 100}, CPosition position, CMove 0 position position, idle)

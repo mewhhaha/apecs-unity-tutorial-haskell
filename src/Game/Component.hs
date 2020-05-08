@@ -73,8 +73,6 @@ instance Random Obstacle where
 
 type Position = V2 Int
 
-data Interpolate = Interpolate Double Position Position
-
 newtype Stat
   = Stat
       { life :: Int
@@ -139,9 +137,9 @@ newtype CObstacle = CObstacle Obstacle
 
 instance Component CObstacle where type Storage CObstacle = Apecs.Map CObstacle
 
-newtype CInterpolate = CInterpolate Interpolate
+data CMove = CMove Double Position Position
 
-instance Component CInterpolate where type Storage CInterpolate = Apecs.Map CInterpolate
+instance Component CMove where type Storage CMove = Apecs.Map CMove
 
 type CProp = Clip Prop
 

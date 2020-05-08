@@ -195,8 +195,8 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     playFruit Env.Misc {sfxFruit} = playSound miscSound sfxFruit
     toScreen :: Integral a => V2 Double -> V2 a
     toScreen p = floor . (* 32) <$> p
-    interpolate :: Interpolate -> V2 Double
-    interpolate (Interpolate t from to) = (fromIntegral <$> from) ^+^ (min (t / duration) 1 *^ (fromIntegral <$> (to ^-^ from)))
+    interpolate :: CMove -> V2 Double
+    interpolate (CMove t from to) = (fromIntegral <$> from) ^+^ (min (t / duration) 1 *^ (fromIntegral <$> (to ^-^ from)))
       where
         duration = 0.1
     drawToScreen :: forall s. Drawable s => (V2 Double, s) -> System' ()
@@ -210,8 +210,8 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     drawObstacle variants = cdraw $ \(CPosition pos, CObstacle variant, CStat Stat {life}, _ :: Not CDead) -> do
       sheet <- Map.lookup variant variants
       return (pos, sheet {clip = Just $ if life <= 1 then ODamaged else ONew})
-    drawCreature :: forall c. (Members World IO c, Get World IO c) => (Interpolate -> Double -> Double -> c -> System' ()) -> System' ()
-    drawCreature f = cmapM_ $ \(c :: c, _ :: Not CDead, CInterpolate lin, CAnimation time dur) -> f lin time dur c
+    drawCreature :: forall c. (Members World IO c, Get World IO c) => (CMove -> Double -> Double -> c -> System' ()) -> System' ()
+    drawCreature f = cmapM_ $ \(c :: c, _ :: Not CDead, move :: CMove, CAnimation time dur) -> f move time dur c
     drawPlayer :: Env.Player -> System' ()
     drawPlayer Env.Player {idle, hurt, attack} = drawCreature @CPlayer $
       \lin time dur (CPlayer p) ->

@@ -183,7 +183,7 @@ stepPlayer next =
       if not occupied
         then do
           record PlayerMove
-          pure $ Right (CPosition next, CInterpolate (Interpolate 0 pos next))
+          pure $ Right (CPosition next, CMove 0 pos next)
         else pure $ Left ()
     attacking <-
       case attack of
@@ -200,7 +200,7 @@ finishAnimation to = cmap $ \(_ :: c, CAnimation time duration) ->
 
 stepAnimation :: Double -> System' ()
 stepAnimation dt = do
-  cmap $ \(CInterpolate (Interpolate time from to)) -> Just (CInterpolate (Interpolate (time + dt) from to))
+  cmap $ \(CMove time from to) -> Just (CMove (time + dt) from to)
   cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
   cmap $
     \(CPlayer ps, CAnimation time duration) -> case (time >= duration, ps) of
@@ -237,7 +237,7 @@ stepEnemies targets =
         record EnemyAttack
         pure $ Right (state ZAttack VAttack)
       (_, True) -> pure $ Right (state ZIdle VIdle)
-      _ -> pure $ Left (CPosition next, CInterpolate (Interpolate 0 pos next), state ZIdle VIdle)
+      _ -> pure $ Left (CPosition next, CMove 0 pos next, state ZIdle VIdle)
 
 stepItems :: Map.Map Position Entity -> System' ()
 stepItems pickers = do
