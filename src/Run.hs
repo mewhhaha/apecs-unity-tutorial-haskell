@@ -204,7 +204,7 @@ stepAnimation dt = do
   cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
   cmap $
     \(CPlayer ps, CAnimation time duration) -> case (time >= duration, ps) of
-      (True, a : rest@(b : _)) -> Right (CPlayer rest, Player.animate b)
+      (True, a : rest@(b : _)) -> Right (CPlayer rest, Player.animation b)
       _ -> Left ()
 
 killObstacles :: System' ()
@@ -262,9 +262,9 @@ stepLast :: System' ()
 stepLast = do
   (CLatest latest) <- get global
   cmapM_ $ \(_ :: CPlayer, CStat Stat {life}) -> when (life <= 0) (record PlayerDie)
-  cmap $ \(CPlayer state) -> let state' = reverse (PIdle : state) in Just (CPlayer state', Player.animate (head state'))
-  cmap $ \(CZombie state) -> Just (Zombie.animate state)
-  cmap $ \(CVampire state) -> Just (Vampire.animate state)
+  cmap $ \(CPlayer state) -> let state' = reverse (PIdle : state) in Just (CPlayer state', Player.animation (head state'))
+  cmap $ \(CZombie state) -> Just (Zombie.animation state)
+  cmap $ \(CVampire state) -> Just (Vampire.animation state)
 
 evalNext :: [Event] -> System' (Maybe Position)
 evalNext events =

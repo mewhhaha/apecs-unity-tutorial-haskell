@@ -11,9 +11,13 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 
 ## Inspiration
 
+[http://jxv.io/blog/2018-02-28-A-Game-in-Haskell.html](http://jxv.io/blog/2018-02-28-A-Game-in-Haskell.html)
+
+- Non-`apecs` example with `SDL2`
+
 [https://nmaehlmann.itch.io/mallrl](https://nmaehlmann.itch.io/mallrl)
 
-- Good example on how to use `apecs` and `SDL2` in a game
+- Main inspiration of how to use `apecs` and `SDL2` in a game
 
 [https://lazyfoo.net/tutorials/SDL/](https://lazyfoo.net/tutorials/SDL/)
 
@@ -34,3 +38,7 @@ To play you have to move the built binary to the `game` folder and run it from t
 `stack build --copy-bins --local-bin-path game`
 
 run `game-exe` in the game folder
+
+### 4. Thanks
+
+If I forgot something or you think something should be added just open an issue!
