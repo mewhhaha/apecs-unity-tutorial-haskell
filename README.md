@@ -2,7 +2,7 @@
 
 This is a project loosely based on the Unity 2D Roguelike tutorial. Assets are from [https://learn.unity.com/project/2d-roguelike-tutorial](https://learn.unity.com/project/2d-roguelike-tutorial). It is built upon the ECS [apecs](https://hackage.haskell.org/package/apecs) for game logic and [sdl2](https://www.libsdl.org/download-2.0.php) for window management, images, audio and fonts.
 
-![GIF of the game](https://github.com/mewhhaha/apecs-unity-tutorial-haskell/public/footage.gif)
+![GIF of the game](./public/footage.gif)
 
 ## Issues during development
 
