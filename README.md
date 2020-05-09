@@ -41,4 +41,4 @@ run `game-exe` in the game folder
 
 ### 4. Thanks
 
-If I forgot something or you think something should be added just open an issue!
+If I forgot something or you think something should be added just open an issue! Free to do whatever with my code, but the assets aren't mine.
