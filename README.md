@@ -8,8 +8,13 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 
 - Some `.aif` files wouldn't work so converted them to `ogg`
 - Had issues described in [https://github.com/haskell-game/sdl2-mixer/issues/5](https://github.com/haskell-game/sdl2-mixer/issues/5) and solved it the same way, using a `Bytestring` instead of `Music`
+- Some documentation about SDL2 bindings that I had a hard time finding, but managed to find what I needed from the respective Github projects of the different bindings.
 
 ## Inspiration
+
+[https://hackage.haskell.org/package/apecs](https://hackage.haskell.org/package/apecs)
+
+- `apecs` is an ECS I always wanted to try out
 
 [http://jxv.io/blog/2018-02-28-A-Game-in-Haskell.html](http://jxv.io/blog/2018-02-28-A-Game-in-Haskell.html)
 
@@ -22,6 +27,13 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 [https://lazyfoo.net/tutorials/SDL/](https://lazyfoo.net/tutorials/SDL/)
 
 - Tutorials on how to use SDL2
+
+[https://github.com/haskell-game/sdl2](https://github.com/haskell-game/sdl2)
+[https://hackage.haskell.org/package/sdl2-image](https://hackage.haskell.org/package/sdl2-image)
+[https://hackage.haskell.org/package/sdl2-mixer](https://hackage.haskell.org/package/sdl2-mixer)
+[https://hackage.haskell.org/package/sdl2-ttf](https://hackage.haskell.org/package/sdl2-ttf)
+
+- Couldn't have done it without the SDL2 bindings
 
 ## Building on Windows
 
