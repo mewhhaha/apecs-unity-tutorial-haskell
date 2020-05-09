@@ -1,6 +1,6 @@
 # Unity Tutorial Project in Haskell with Apecs and SDL2
 
-This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow the tutorial exactly, but is similar. Assets are from [https://learn.unity.com/project/2d-roguelike-tutorial](https://learn.unity.com/project/2d-roguelike-tutorial). It is built upon the ECS [apecs](https://hackage.haskell.org/package/apecs) for game logic and [sdl2](https://www.libsdl.org/download-2.0.php) for window management, images, audio and fonts.
+This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow the tutorial by the letter, but is very similar. Assets are from [https://learn.unity.com/project/2d-roguelike-tutorial](https://learn.unity.com/project/2d-roguelike-tutorial). It is built upon the ECS [apecs](https://hackage.haskell.org/package/apecs) for game logic and [sdl2](https://www.libsdl.org/download-2.0.php) for window management, images, audio and fonts.
 
 ![GIF of the game](./public/footage.gif)
 
