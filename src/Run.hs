@@ -71,12 +71,11 @@ dirToV2 = \case
     distance = 1
 
 record :: Happened -> System' ()
-record = modify global . (<>) . CLatest . (: [])
+record h = modify global (\(CLatest latest) -> CLatest (h : latest))
 
 tick :: Double -> System' ()
 tick dt = do
   modify global $ \(CTime time) -> CTime (time + toTime dt)
-  (CTime time) <- get global
   set global (CLatest [])
 
 spread :: RandomGen r => Int -> r -> State.State [Position] [Position]
@@ -84,6 +83,7 @@ spread starts g = do
   positions <- State.get
   return (Set.toList . Set.fromList . concat $ start positions <$> gs)
   where
+    decreaseChance, initialChance :: Double
     decreaseChance = 0.1
     initialChance = 0.4
     gs = take starts $ iterate (snd . split) g
@@ -207,8 +207,8 @@ stepAnimation dt = do
       (True, a : rest@(b : _)) -> Right (CPlayer rest, Player.animate b)
       _ -> Left ()
 
-removeObstacles :: System' ()
-removeObstacles = cmapM $ \(CObstacle _, CStat Stat {life}) ->
+killObstacles :: System' ()
+killObstacles = cmapM $ \(CObstacle _, CStat Stat {life}) ->
   if life > 0
     then pure $ Left ()
     else do
@@ -289,7 +289,7 @@ step env dt events = do
       shouldUpdate <- evalNext events
       whenJust shouldUpdate $ \next -> do
         stepPlayer next
-        removeObstacles
+        killObstacles
         targets <- getEntities @CPlayer
         stepItems targets
         stepEnemies targets
