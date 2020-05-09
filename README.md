@@ -29,6 +29,8 @@ This is a project loosely based on the Unity 2D Roguelike tutorial. Assets are f
 
 ### 3. Build and run
 
+To play you have to move the built binary to the `game` folder and run it from that directory.
+
 `stack build --copy-bins --local-bin-path game`
 
 run `game-exe` in the game folder
