@@ -31,7 +31,7 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 
 `stack exec -- pacman -S mingw-w64-x86_64-pkg-config mingw-w64-x86_64-SDL2`
 
-### 3. Build and run
+### 2. Build and run
 
 To play you have to move the built binary to the `game` folder and run it from that directory.
 
@@ -39,6 +39,6 @@ To play you have to move the built binary to the `game` folder and run it from t
 
 run `game-exe` in the game folder
 
-### 4. Thanks
+### 3. Thanks
 
 If I forgot something or you think something should be added just open an issue! Free to do whatever with my code, but the assets aren't mine.
