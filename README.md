@@ -28,10 +28,10 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 
 - Tutorials on how to use SDL2
 
-[https://github.com/haskell-game/sdl2](https://github.com/haskell-game/sdl2)
-[https://hackage.haskell.org/package/sdl2-image](https://hackage.haskell.org/package/sdl2-image)
-[https://hackage.haskell.org/package/sdl2-mixer](https://hackage.haskell.org/package/sdl2-mixer)
-[https://hackage.haskell.org/package/sdl2-ttf](https://hackage.haskell.org/package/sdl2-ttf)
+[https://github.com/haskell-game/sdl2](https://github.com/haskell-game/sdl2)  
+[https://hackage.haskell.org/package/sdl2-image](https://hackage.haskell.org/package/sdl2-image)  
+[https://hackage.haskell.org/package/sdl2-mixer](https://hackage.haskell.org/package/sdl2-mixer)  
+[https://hackage.haskell.org/package/sdl2-ttf](https://hackage.haskell.org/package/sdl2-ttf)  
 
 - Couldn't have done it without the SDL2 bindings
 
