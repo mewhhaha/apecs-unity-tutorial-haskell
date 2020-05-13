@@ -91,7 +91,7 @@ obstacles sheet =
 
 resources :: SDL.Renderer -> IO Env.Env
 resources r = do
-  loadedFont <- loadFont "PressStart2P-regular.ttf"
+  loadedFont <- loadFont "PressStart2P-Regular.ttf"
   sheet <- loadImage "Scavengers_SpriteSheet.png"
   let loadedProp = loadSheet32x32 (xy32 2 2) sheet
       loadedGround = loadSheet32x32 (xy32 0 4) sheet
