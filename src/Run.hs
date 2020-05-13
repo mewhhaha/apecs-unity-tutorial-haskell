@@ -10,17 +10,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Run where
 
 import Apecs
   ( Entity,
     Get,
-    Has,
     Members,
     Not (..),
-    Proxy (..),
     Set,
     ask,
     cfold,
@@ -28,7 +25,6 @@ import Apecs
     cmap,
     cmapM,
     cmapM_,
-    exists,
     get,
     global,
     lift,
@@ -37,9 +33,8 @@ import Apecs
     runWith,
     set,
   )
-import Apecs.Experimental.Reactive
 import Control.Arrow
-import Control.Monad (filterM, void, when, zipWithM_)
+import Control.Monad (void, when, zipWithM_)
 import qualified Control.Monad.State.Strict as State
 import qualified Creature.Player as Player
 import qualified Creature.Vampire as Vampire
@@ -47,18 +42,18 @@ import qualified Creature.Zombie as Zombie
 import Data.Function (on)
 import Data.List (sortBy)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, mapMaybe)
 import qualified Data.Set as Set
-import Draw (draw)
+import qualified Draw
 import Engine.SDL (play)
 import qualified Env
-import Event (Event (..), events)
-import GHC.TypeNats
+import Event (Event (..))
+import qualified Event
 import Game.Component
 import Game.World (All, System', World, initWorld)
-import Helper.Extra (eitherIf, entitiesAt, getAny, hasAny, maybeIf, toTime, whenJust, whenM)
+import Helper.Extra (eitherIf, entitiesAt, getAny, hasAny, maybeIf, toTime, whenJust)
 import Helper.Happened (isPlayerDie, isPlayerWin, isRestart)
-import Linear ((*^), V2 (..), V4 (..), (^+^), (^-^))
+import Linear (V2 (..))
 import System.Random (RandomGen, mkStdGen, newStdGen, random, randomR, randomRs, randoms, setStdGen, split)
 
 dirToV2 :: Direction -> Position
@@ -79,19 +74,19 @@ tick dt = do
   set global (CLatest [])
 
 spread :: RandomGen r => Int -> r -> State.State [Position] [Position]
-spread starts g = do
+spread starts originalGen = do
   positions <- State.get
   return (Set.toList . Set.fromList . concat $ start positions <$> gs)
   where
     decreaseChance, initialChance :: Double
     decreaseChance = 0.1
     initialChance = 0.4
-    gs = take starts $ iterate (snd . split) g
+    gs = take starts $ iterate (snd . split) originalGen
     start :: RandomGen r => [Position] -> r -> [Position]
-    start positions g = expand g' initialChance n
+    start positions startGen = expand g'' initialChance n'
       where
         ps = Set.fromList positions
-        (n, g') = randPos g ps
+        (n', g'') = randPos startGen ps
         randPos :: RandomGen r => r -> Set.Set Position -> (Position, r)
         randPos g xs = let (n, g') = randomR (0, Set.size xs - 1) g in (Set.elemAt n xs, g')
         expand :: RandomGen r => r -> Double -> Position -> [Position]
@@ -147,8 +142,6 @@ initialize level = do
         go v p = void $ newEntity (CPosition p, CObstacle v, CStat Stat {life = 2})
     newEnumsAt :: (Set World IO (Clip a)) => [a] -> [Position] -> System' ()
     newEnumsAt es ps = sequence_ $ newEntity . (Clip *** CPosition) <$> zip es ps
-    ends :: [Double] -> (Int, Int)
-    ends l = (floor $ head l, floor $ last l)
     shuffle :: RandomGen r => r -> [a] -> [a]
     shuffle r = fmap snd . sortBy (compare `on` fst) . zip (randoms @Int r)
     pick :: RandomGen r => r -> Int -> State.State [a] [a]
@@ -172,7 +165,7 @@ recover e n =
 
 stepPlayer :: Position -> System' ()
 stepPlayer next =
-  cmapM $ \(CPlayer state, CPosition pos, CStat Stat {life}) -> do
+  cmapM $ \(CPlayer _, CPosition pos, CStat Stat {life}) -> do
     record AteFood
     at <- entitiesAt next
     win <- hasAny @CGoal at
@@ -204,7 +197,7 @@ stepAnimation dt = do
   cmap $ \(CAnimation time duration) -> Just (CAnimation (time + dt) duration)
   cmap $
     \(CPlayer ps, CAnimation time duration) -> case (time >= duration, ps) of
-      (True, a : rest@(b : _)) -> Right (CPlayer rest, Player.animation b)
+      (True, _ : rest@(b : _)) -> Right (CPlayer rest, Player.animation b)
       _ -> Left ()
 
 killObstacles :: System' ()
@@ -215,8 +208,8 @@ killObstacles = cmapM $ \(CObstacle _, CStat Stat {life}) ->
       record ObstacleDie
       pure $ Right CDead
 
-stepEnemies :: Map.Map Position Entity -> System' ()
-stepEnemies targets =
+stepEnemies :: System' ()
+stepEnemies =
   cmapM $ \(CEnemy, eitherEnemy :: Either CZombie CVampire, CPosition pos) -> do
     g <- lift newStdGen
     let (direction, _) = random g
@@ -232,7 +225,7 @@ stepEnemies targets =
       (Just target, _) -> do
         let damage = 10
         hurt target damage
-        modify target $ \(CPlayer state) -> CPlayer (PHurt : state)
+        modify target $ \(CPlayer playerState) -> CPlayer (PHurt : playerState)
         record (PlayerHurt damage)
         record EnemyAttack
         pure $ Right (state ZAttack VAttack)
@@ -247,7 +240,7 @@ stepItems pickers = do
   pick @CSoda (SodaPicked soda) soda
   where
     pick :: forall c. (Members World IO c, Get World IO c) => Happened -> Word -> System' ()
-    pick happening i = cmapM $ \(_ :: c, CPosition pos, self :: Entity) ->
+    pick happening i = cmapM $ \(_ :: c, CPosition pos) ->
       case Map.lookup pos pickers of
         Nothing -> pure $ Left ()
         Just picker -> do
@@ -260,7 +253,6 @@ removeDead = cmap $ \CDead -> Not @All
 
 stepLast :: System' ()
 stepLast = do
-  (CLatest latest) <- get global
   cmapM_ $ \(_ :: CPlayer, CStat Stat {life}) -> when (life <= 0) (record PlayerDie)
   cmap $ \(CPlayer state) -> let state' = reverse (PIdle : state) in Just (CPlayer state', Player.animation (head state'))
   cmap $ \(CZombie state) -> Just (Zombie.animation state)
@@ -279,7 +271,7 @@ evalNext events =
         dir _ = Nothing
 
 step :: Env.Env -> Double -> [Event] -> System' ()
-step env dt events = do
+step _ dt events = do
   removeDead
   tick dt
   stepAnimation dt
@@ -292,7 +284,7 @@ step env dt events = do
         killObstacles
         targets <- getEntities @CPlayer
         stepItems targets
-        stepEnemies targets
+        stepEnemies
         stepLast
     LevelStart -> when (EnterPressed `elem` events) $ set global GamePlay
     GameOver -> when (EnterPressed `elem` events) $ record Restart
@@ -335,4 +327,4 @@ change _ = do
 run :: World -> IO ()
 run w = do
   w' <- runWith w (initialize 0 >> ask)
-  play w' Env.resources events step draw change
+  play w' Env.resources Event.events step Draw.draw change

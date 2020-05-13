@@ -1,25 +1,6 @@
-library:
-  source-dirs: src
-  dependencies:
-    - sdl2
-    - sdl2-image
-    - sdl2-mixer
-    - sdl2-ttf
-    - apecs
-    - linear
-    - containers
-    - random
-    - mtl
-    - array
-    - filepath
-    - bytestring
-    - typelits-witnesses
-    - text
-    - StateVar
 copyright: 2020 Jacob Torrång
 maintainer: kopatheonlyone@hotmail.com
-dependencies:
-  - base >= 4.7 && < 5
+
 name: game
 version: 0.1.0.0
 extra-source-files:
@@ -27,16 +8,41 @@ extra-source-files:
 author: mewhhaha
 github: mewhhaha/apecs-unity-tutorial-haskell
 license: null
+
+dependencies:
+  - base >= 4.7 && < 5
+  - polysemy
+  - polysemy-plugin
+  - sdl2
+  - sdl2-image
+  - sdl2-mixer
+  - sdl2-ttf
+  - apecs
+  - linear
+  - containers
+  - random
+  - mtl
+  - array
+  - filepath
+  - bytestring
+  - typelits-witnesses
+  - text
+  - StateVar
+library:
+  source-dirs: src
+
+ghc-options:
+  - -threaded
+  - -rtsopts
+  - -with-rtsopts=-N
+  - -O2
+  - -fplugin=Polysemy.Plugin
+  - -Wall
+
 executables:
   game-exe:
     source-dirs: app
     main: Main.hs
-    ghc-options:
-      - -threaded
-      - -rtsopts
-      - -with-rtsopts=-N
-      - -O2
-      - -Wall
     dependencies:
       - game
 description: Please see the README on GitHub at <https://github.com/mewhhaha/apecs-unity-tutorial-haskell#readme>

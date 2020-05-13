@@ -15,15 +15,11 @@ module Env
   )
 where
 
-import Control.Monad
 import qualified Data.ByteString as ByteString
 import qualified Data.Map as Map
 import Engine.SDL.Internal (ASheet, Sheet, Texture, loadTexture, mkASheet, mkClips, mkRect, mkSheet)
-import Foreign.C.Types
-import GHC.Natural
 import GHC.TypeNats
 import qualified Game.Component as C
-import Linear
 import qualified SDL
 import qualified SDL.Font
 import qualified SDL.Mixer
@@ -80,27 +76,27 @@ obstacles :: Texture -> Map.Map C.Obstacle (Sheet C.ObstacleHealth)
 obstacles sheet =
   Map.fromList $
     fmap (mkSheet sheet)
-      <$> [ (C.O1, obstacle (xy32 5 2) (xy32 0 6)),
-            (C.O2, obstacle (xy32 6 2) (xy32 1 6)),
-            (C.O3, obstacle (xy32 7 2) (xy32 2 6)),
-            (C.O4, obstacle (xy32 0 3) (xy32 3 6)),
-            (C.O5, obstacle (xy32 3 3) (xy32 4 6)),
-            (C.O6, obstacle (xy32 5 3) (xy32 4 6)),
-            (C.O7, obstacle (xy32 6 3) (xy32 5 6)),
-            (C.O8, obstacle (xy32 7 3) (xy32 6 6))
+      <$> [ (C.O1, make (xy32 5 2) (xy32 0 6)),
+            (C.O2, make (xy32 6 2) (xy32 1 6)),
+            (C.O3, make (xy32 7 2) (xy32 2 6)),
+            (C.O4, make (xy32 0 3) (xy32 3 6)),
+            (C.O5, make (xy32 3 3) (xy32 4 6)),
+            (C.O6, make (xy32 5 3) (xy32 4 6)),
+            (C.O7, make (xy32 6 3) (xy32 5 6)),
+            (C.O8, make (xy32 7 3) (xy32 6 6))
           ]
   where
     mkRect32 (x, y) = mkRect x y (times32 1) (times32 1)
-    obstacle new damaged = Map.fromList [(C.ONew, mkRect32 new), (C.ODamaged, mkRect32 damaged)]
+    make new damaged = Map.fromList [(C.ONew, mkRect32 new), (C.ODamaged, mkRect32 damaged)]
 
 resources :: SDL.Renderer -> IO Env.Env
 resources r = do
-  font <- loadFont "PressStart2P-regular.ttf"
+  loadedFont <- loadFont "PressStart2P-regular.ttf"
   sheet <- loadImage "Scavengers_SpriteSheet.png"
-  let prop = loadSheet32x32 (xy32 2 2) sheet
-      ground = loadSheet32x32 (xy32 0 4) sheet
-      wall = mkSheet sheet (Map.fromList [(C.W1, mkRect32 (xy32 1 3)), (C.W2, mkRect32 (xy32 2 3)), (C.W3, mkRect32 (xy32 4 3))])
-      obstacle = obstacles sheet
+  let loadedProp = loadSheet32x32 (xy32 2 2) sheet
+      loadedGround = loadSheet32x32 (xy32 0 4) sheet
+      loadedWall = mkSheet sheet (Map.fromList [(C.W1, mkRect32 (xy32 1 3)), (C.W2, mkRect32 (xy32 2 3)), (C.W3, mkRect32 (xy32 4 3))])
+      loadedObstacle = obstacles sheet
       playerAttack = loadASheet32x32 (xy32 0 5) sheet
       playerIdle = loadASheet32x32 (xy32 0 0) sheet
       playerHurt = loadASheet32x32 (xy32 4 5) sheet
@@ -108,35 +104,35 @@ resources r = do
       vampireAttack = loadASheet32x32 (xy32 4 5) sheet
       zombieIdle = loadASheet32x32 (xy32 6 0) sheet
       zombieAttack = loadASheet32x32 (xy32 2 5) sheet
-  sfxFootstep <- loadAudios ["scavengers_footstep1.aif", "scavengers_footstep2.aif"]
-  sfxSoda <- loadAudios ["scavengers_soda1.ogg", "scavengers_soda2.ogg"]
-  sfxFruit <- loadAudios ["scavengers_fruit1.aif", "scavengers_fruit2.aif"]
-  sfxChop <- loadAudios ["scavengers_chop1.ogg", "scavengers_chop2.ogg"]
-  sfxEnemyAttack <- loadAudios ["scavengers_enemy1.aif", "scavengers_enemy2.aif"]
-  sfxMusic <- ByteString.readFile ("resources" </> "audio" </> "scavengers_music.ogg")
-  sfxDie <- loadAudio "scavengers_die.aif"
+  loadedFootstep <- loadAudios ["scavengers_footstep1.aif", "scavengers_footstep2.aif"]
+  loadedSoda <- loadAudios ["scavengers_soda1.ogg", "scavengers_soda2.ogg"]
+  loadedFruit <- loadAudios ["scavengers_fruit1.aif", "scavengers_fruit2.aif"]
+  loadedChop <- loadAudios ["scavengers_chop1.ogg", "scavengers_chop2.ogg"]
+  loadedEnemyAttack <- loadAudios ["scavengers_enemy1.aif", "scavengers_enemy2.aif"]
+  loadedMusic <- ByteString.readFile ("resources" </> "audio" </> "scavengers_music.ogg")
+  loadedDie <- loadAudio "scavengers_die.aif"
   pure
     Env.Env
-      { prop = prop,
-        font = font,
-        music = sfxMusic,
-        ground = ground,
-        obstacle = obstacle,
-        wall = wall,
+      { prop = loadedProp,
+        font = loadedFont,
+        music = loadedMusic,
+        ground = loadedGround,
+        obstacle = loadedObstacle,
+        wall = loadedWall,
         misc =
           Env.Misc
-            { sfxSoda = sfxSoda,
-              sfxFruit = sfxFruit
+            { sfxSoda = loadedSoda,
+              sfxFruit = loadedFruit
             },
-        enemy = Env.Enemy {sfxAttack = sfxEnemyAttack},
+        enemy = Env.Enemy {sfxAttack = loadedEnemyAttack},
         player =
           Env.Player
             { attack = playerAttack,
               idle = playerIdle,
               hurt = playerHurt,
-              sfxFootstep = sfxFootstep,
-              sfxChop = sfxChop,
-              sfxDie = sfxDie
+              sfxFootstep = loadedFootstep,
+              sfxChop = loadedChop,
+              sfxDie = loadedDie
             },
         vampire =
           Env.Vampire

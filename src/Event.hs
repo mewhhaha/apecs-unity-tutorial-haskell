@@ -1,22 +1,13 @@
 module Event (events, Event (..)) where
 
-import Apecs
 import Control.Monad (when)
 import Data.Either (lefts)
-import Data.Maybe (mapMaybe)
 import qualified Env
 import Game.Component (Direction (..))
-import Game.World (System')
 import qualified SDL
 
 data Event = InputMove Direction | InputQuit | EnterPressed
   deriving (Eq)
-
-isKeyPressed :: SDL.Scancode -> SDL.EventPayload -> Bool
-isKeyPressed sc ke@(SDL.KeyboardEvent e) = justPressed && isKeyDown sc ke
-  where
-    justPressed = not (SDL.keyboardEventRepeat e)
-isKeyPressed _ _ = False
 
 isKeyDown :: SDL.Scancode -> SDL.EventPayload -> Bool
 isKeyDown scancode (SDL.KeyboardEvent e) = pressed && rightKey

@@ -19,7 +19,6 @@ import Apecs
     Members,
     Not (..),
     cfold,
-    cfoldM_,
     cmapM_,
     get,
     global,
@@ -35,7 +34,7 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.StateVar as StateVar
 import qualified Data.Text as Text
 import Engine.SDL (render)
-import Engine.SDL.Internal (ASheet, Drawable, Sheet (..), TextElement (..), Texture (..), XAlignment (..), animate, linear, loadTexture, mkASheet, mkClips, mkPoint, mkRect, mkSheet, mkTextElement)
+import Engine.SDL.Internal (ASheet, Drawable, Sheet (..), TextElement (..), Texture (..), XAlignment (..), linear, mkTextElement)
 import qualified Env
 import GHC.TypeNats
 import Game.Component
@@ -128,7 +127,7 @@ drawUI w r = do
     isGamePlay _ = False
     getTextHeight (TextElement _ (Texture _ ti)) = SDL.textureHeight ti
     renderText :: (Integral i, MonadIO m) => (i, i) -> TextElement -> m ()
-    renderText (x, y) el = render r (V2 (x + fromIntegral (getTextOffset el)) y) el
+    renderText (x, y) el = render r (V2 (x + getTextOffset el) y) el
     clearBlack :: System' ()
     clearBlack = do
       let black = V4 0 0 0 0
@@ -169,9 +168,9 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     volume :: SDL.Mixer.Volume
     volume = 20
     playMusic :: ByteString -> System' ()
-    playMusic music = lift $ do
+    playMusic m = lift $ do
       SDL.Mixer.setMusicVolume 20
-      decoded <- SDL.Mixer.decode music
+      decoded <- SDL.Mixer.decode m
       SDL.Mixer.playMusic SDL.Mixer.Once decoded
     playSound :: SDL.Mixer.Channel -> [SDL.Mixer.Chunk] -> System' ()
     playSound ch chunks = do
@@ -193,7 +192,7 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
     playSoda Env.Misc {sfxSoda} = playSound miscSound sfxSoda
     playFruit :: Env.Misc -> System' ()
     playFruit Env.Misc {sfxFruit} = playSound miscSound sfxFruit
-    toScreen :: Integral a => V2 Double -> V2 a
+    toScreen :: V2 Double -> V2 Int
     toScreen p = floor . (* 32) <$> p
     interpolate :: CMove -> V2 Double
     interpolate (CMove t from to) = (fromIntegral <$> from) ^+^ (min (t / duration) 1 *^ (fromIntegral <$> (to ^-^ from)))
@@ -221,6 +220,7 @@ draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, pro
               (Just PIdle) -> go idle
               (Just PHurt) -> go hurt
               (Just PAttack) -> go attack
+              Nothing -> go idle
     drawVampire :: Env.Vampire -> System' ()
     drawVampire Env.Vampire {idle, attack} = drawCreature @CVampire $
       \lin time dur (CVampire p) ->

@@ -5,10 +5,13 @@ import Control.Monad (void)
 import Game.Component
 import Game.World
 
+idle :: CAnimation
 idle = CAnimation 0 0.8
 
+attack :: CAnimation
 attack = CAnimation 0 0.4
 
+animation :: Zombie -> CAnimation
 animation ZIdle = idle
 animation ZAttack = attack
 

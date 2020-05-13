@@ -12,11 +12,10 @@
 
 module Engine.SDL.Internal where
 
-import Control.Arrow ((&&&))
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Fixed (mod')
-import Data.Map.Strict as Map
+import qualified Data.Map.Strict as Map
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Type.Equality ((:~:) (Refl))
@@ -29,7 +28,6 @@ import qualified SDL
 import SDL (($=))
 import qualified SDL.Font
 import qualified SDL.Image
-import qualified SDL.Mixer
 
 data Texture = Texture SDL.Texture SDL.TextureInfo
 
@@ -111,6 +109,7 @@ linear time duration = case nat of
     (Just Refl, Just Refl) -> decide p
     (Just Refl, Nothing) -> animate @n
     (Nothing, Just Refl) -> animate @1
+    (Nothing, Nothing) -> error "can't reach this"
   where
     size :: Natural
     size = natVal (Proxy @n)
@@ -149,7 +148,7 @@ withSDLImage op = do
 withSDLFont :: (MonadIO m) => m a -> m ()
 withSDLFont op = do
   SDL.Font.initialize
-  op
+  void op
   SDL.Font.quit
 
 withWindow :: (MonadIO m) => Text -> (Int, Int) -> (SDL.Window -> m a) -> m ()

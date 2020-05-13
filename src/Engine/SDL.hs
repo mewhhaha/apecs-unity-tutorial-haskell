@@ -8,12 +8,9 @@ where
 
 import Apecs (System, runWith)
 import Control.Monad.IO.Class (MonadIO)
-import qualified Data.Map as Map
 import Engine.SDL.Internal (Drawable, Texture (..), getFrame, getTexture, isQuitEvent, mkRect, setHintQuality, withRenderer, withSDL, withSDLFont, withSDLImage, withWindow)
 import qualified SDL
 import SDL (($=), V2 (..), V4 (..))
-import qualified SDL.Font
-import qualified SDL.Image
 import qualified SDL.Mixer
 
 windowSize :: Integral a => (a, a)
@@ -66,7 +63,6 @@ play world createEnv handleEvents stepSystem drawSystem changeSystem =
       withWindow "My game" windowSize $ \w ->
         withRenderer w $ \r -> do
           env <- createEnv r
-          t <- SDL.time
           loop 0 world $
             \dt curr -> do
               events <- SDL.pollEvents

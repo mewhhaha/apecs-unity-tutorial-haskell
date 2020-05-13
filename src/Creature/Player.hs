@@ -5,12 +5,16 @@ import Control.Monad (void)
 import Game.Component
 import Game.World
 
+idle :: CAnimation
 idle = CAnimation 0 0.5
 
+attack :: CAnimation
 attack = CAnimation 0 0.2
 
+hurt :: CAnimation
 hurt = CAnimation 0 0.5
 
+animation :: Player -> CAnimation
 animation PHurt = hurt
 animation PAttack = attack
 animation PIdle = idle

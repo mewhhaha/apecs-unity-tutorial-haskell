@@ -12,7 +12,7 @@ module Game.Component where
 import Apecs
 import Apecs.Experimental.Reactive (IxMap, Reactive)
 import Data.Array (Ix)
-import Engine.SDL.Internal (TextElement, Texture)
+import Engine.SDL.Internal (TextElement)
 import Linear (V2 (..))
 import System.Random (Random, RandomGen, random, randomR)
 
