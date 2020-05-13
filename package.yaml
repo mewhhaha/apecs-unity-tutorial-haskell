@@ -11,8 +11,6 @@ license: null
 
 dependencies:
   - base >= 4.7 && < 5
-  - polysemy
-  - polysemy-plugin
   - sdl2
   - sdl2-image
   - sdl2-mixer
@@ -36,7 +34,6 @@ ghc-options:
   - -rtsopts
   - -with-rtsopts=-N
   - -O2
-  - -fplugin=Polysemy.Plugin
   - -Wall
 
 executables:
