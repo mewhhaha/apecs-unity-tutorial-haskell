@@ -44,8 +44,11 @@ import Data.List (sortBy)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, mapMaybe)
 import qualified Data.Set as Set
+import qualified Data.Text as Text
 import qualified Draw
 import Engine.SDL (play)
+import Engine.SDL.Effect
+import Engine.SDL.Internal
 import qualified Env
 import Event (Event (..))
 import qualified Event
@@ -54,6 +57,8 @@ import Game.World (All, System', World, initWorld)
 import Helper.Extra (eitherIf, entitiesAt, getAny, hasAny, maybeIf, toTime, whenJust)
 import Helper.Happened (isPlayerDie, isPlayerWin, isRestart)
 import Linear (V2 (..))
+import Polysemy (runM)
+import Polysemy.Resource (runResource)
 import System.Random (RandomGen, mkStdGen, newStdGen, random, randomR, randomRs, randoms, setStdGen, split)
 
 dirToV2 :: Direction -> Position
@@ -324,7 +329,20 @@ change _ = do
           cmap $ \(_ :: CPlayer) -> Just (CStat Stat {life = life + 1})
           ask
 
+windowSize :: (Int, Int)
+windowSize = (640, 480)
+
+windowTitle :: Text.Text
+windowTitle = "My game"
+
 run :: World -> IO ()
 run w = do
   w' <- runWith w (initialize 0 >> ask)
-  play w' Env.resources Event.events step Draw.draw change
+  runM . runResource
+    . runSDL
+    . runSDLFont
+    . runSDLMixer
+    . runSDLWindow windowTitle windowSize
+    . runSDLRenderer
+    . runSDLImage
+    $ play w' Env.resources Event.events step Draw.draw change
