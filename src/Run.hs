@@ -45,13 +45,13 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes, mapMaybe)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
-import qualified Draw
+import Draw (drawSystem)
 import Engine.SDL (play)
 import Engine.SDL.Effect
 import Engine.SDL.Internal
+import Env (createEnv)
 import qualified Env
-import Event (Event (..))
-import qualified Event
+import Event (Event (..), parseEvents)
 import Game.Component
 import Game.World (All, System', World, initWorld)
 import Helper.Extra (eitherIf, entitiesAt, getAny, hasAny, maybeIf, toTime, whenJust)
@@ -59,6 +59,8 @@ import Helper.Happened (isPlayerDie, isPlayerWin, isRestart)
 import Linear (V2 (..))
 import Polysemy (runM)
 import Polysemy.Resource (runResource)
+import Polysemy.State (runState)
+import qualified SDL
 import System.Random (RandomGen, mkStdGen, newStdGen, random, randomR, randomRs, randoms, setStdGen, split)
 
 dirToV2 :: Direction -> Position
@@ -275,8 +277,8 @@ evalNext events =
         dir (InputMove d) = Just (dirToV2 d)
         dir _ = Nothing
 
-step :: Env.Env -> Double -> [Event] -> System' ()
-step _ dt events = do
+stepSystem :: Double -> [Event] -> System' ()
+stepSystem dt events = do
   removeDead
   tick dt
   stepAnimation dt
@@ -297,8 +299,8 @@ step _ dt events = do
     getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
     getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
 
-change :: Env.Env -> System' World
-change _ = do
+changeSystem :: System' World
+changeSystem = do
   (CLatest latest) <- get global
   let win = any isPlayerWin latest
       restart = any isRestart latest
@@ -335,14 +337,22 @@ windowSize = (640, 480)
 windowTitle :: Text.Text
 windowTitle = "My game"
 
+game :: (Env.Env, [SDL.Event], SDL.Renderer, SDL.Window, Double) -> System' World
+game (env, events, r, w, dt) = do
+  stepSystem dt (parseEvents events)
+  drawSystem env w r
+  changeSystem
+
 run :: World -> IO ()
 run w = do
   w' <- runWith w (initialize 0 >> ask)
-  runM . runResource
-    . runSDL
-    . runSDLFont
-    . runSDLMixer
-    . runSDLWindow windowTitle windowSize
-    . runSDLRenderer
-    . runSDLImage
-    $ play w' Env.resources Event.events step Draw.draw change
+  void
+    $ runM
+      . runResource
+      . runSDL
+      . runSDLFont
+      . runSDLMixer
+      . runSDLWindow windowTitle windowSize
+      . runSDLRenderer
+      . runSDLImage
+    $ play w' createEnv game

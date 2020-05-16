@@ -6,6 +6,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
@@ -14,15 +15,19 @@
 
 module Engine.SDL.Effect where
 
+import qualified Apecs
+import Control.Monad.Identity
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import Data.Word (Word8)
 import Engine.SDL.Internal
 import Polysemy
 import Polysemy.Resource
+import Polysemy.State
 import qualified SDL
-import SDL (($=))
+import SDL (($=), V4)
 import qualified SDL.Font
 import qualified SDL.Image
 import qualified SDL.Mixer
@@ -132,3 +137,44 @@ runSDLMixer sem = bracket (SDL.Mixer.initialize []) (pure SDL.Mixer.quit) . cons
         LoadAudioRaw fp -> embed (ByteString.readFile fp)
     )
     sem
+
+data Draw m a where
+  Clear :: V4 Word8 -> Draw m ()
+  Present :: Draw m ()
+
+makeSem ''Draw
+
+runDraw :: Members [SDLRenderer, SDL, Embed IO] r => Sem (Draw : r) a -> Sem r a
+runDraw sem = do
+  r <- getRenderer
+  interpret
+    ( \case
+        Clear color -> do
+          SDL.rendererDrawColor r $= color
+          SDL.clear r
+        Present -> SDL.present r
+    )
+    sem
+
+data Loop m a where
+  DeltaTime :: Loop m Double
+  Events :: Loop m [SDL.Event]
+
+makeSem ''Loop
+
+runLoop :: Members [SDL, State Double, Embed IO] r => w -> (w -> Sem (Loop : r) (Maybe w)) -> Sem r ()
+runLoop a sem = do
+  curr <- time
+  prev <- get @Double
+  put curr
+  events <- pollEvents
+  result <-
+    interpret
+      ( \case
+          DeltaTime -> return $ curr - prev
+          Events -> return events
+      )
+      (sem a)
+  case result of
+    Nothing -> return ()
+    Just a' -> runLoop a' sem

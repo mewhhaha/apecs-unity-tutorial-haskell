@@ -7,24 +7,28 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Engine.SDL
   ( play,
     render,
-    Engine,
     Environment,
   )
 where
 
 import Apecs (System, runWith)
+import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
 import Engine.SDL.Effect
 import Engine.SDL.Internal
+import Linear (V4 (..))
 import Polysemy
+import Polysemy.Reader
+import Polysemy.State
 import qualified SDL
-import SDL (($=), V2 (..), V4 (..))
+import SDL (V2 (..))
 
 render :: (MonadIO m, Integral p, Drawable a) => SDL.Renderer -> V2 p -> a -> m ()
 render r (V2 x y) s = renderTexture r t f (mkRect (fromIntegral x) (fromIntegral y) w h)
@@ -46,47 +50,26 @@ renderTexture r t mask pos =
 
 type Engine r = Members [Embed IO, SDL, SDLFont, SDLImage, SDLWindow, SDLRenderer, SDLMixer] r
 
-loop :: Engine r => Double -> a -> (Double -> a -> Sem r (Bool, a)) -> Sem r ()
-loop prev a op = do
-  t <- time
-  (quit, a') <- op (t - prev) a
-  if quit then pure () else loop t a' op
-
-type Environment r env = Members [SDLFont, SDLImage, SDLMixer] r => Sem r env
+type Environment env r = Members [SDLFont, SDLImage, SDLMixer] r
 
 play ::
-  Engine r =>
+  forall w r env.
+  (Engine r, Environment env r) =>
   w ->
-  -- | Environment function
-  Environment r env ->
-  -- | Event handling function
-  (env -> [SDL.Event] -> as) ->
-  -- | Stepping function
-  (env -> Double -> as -> System w ()) ->
-  -- | Drawing function
-  (env -> SDL.Window -> SDL.Renderer -> System w ()) ->
-  -- | Change function
-  (env -> System w w) ->
+  Sem r env ->
+  ((env, [SDL.Event], SDL.Renderer, SDL.Window, Double) -> System w w) ->
   Sem r ()
-play world createEnv handleEvents stepSystem drawSystem changeSystem = do
-  w <- getWindow
+play world createEnv game = do
   r <- getRenderer
+  w <- getWindow
   setHintQuality
   env <- createEnv
-  loop 0 world $
-    \dt curr -> do
-      events <- pollEvents
-      let as = handleEvents env events
-      next <-
-        embed
-          ( runWith
-              curr
-              $ do
-                stepSystem env dt as
-                SDL.rendererDrawColor r $= SDL.V4 maxBound maxBound maxBound maxBound
-                SDL.clear r
-                drawSystem env w r
-                SDL.present r
-                changeSystem env
-          )
-      return (any isQuitEvent events, next)
+  let loop :: Members [Loop, Draw, Embed IO] q => w -> Sem q (Maybe w)
+      loop world' = do
+        dt <- deltaTime
+        es <- events
+        clear $ V4 maxBound maxBound maxBound maxBound
+        next <- embed (runWith world' (game (env, es, r, w, dt)))
+        present
+        return $ if any isQuitEvent es then Nothing else Just next
+  void . runDraw . runState @Double 0 . runLoop world $ loop

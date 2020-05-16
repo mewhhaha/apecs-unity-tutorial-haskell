@@ -1,4 +1,4 @@
-module Event (events, Event (..)) where
+module Event (parseEvents, Event (..)) where
 
 import Control.Monad (when)
 import Data.Either (lefts)
@@ -33,5 +33,5 @@ enter e = do
   mapM_ (`down` EnterPressed) [SDL.ScancodeReturn, SDL.ScancodeReturn2, SDL.ScancodeKPEnter]
   e
 
-events :: Env.Env -> [SDL.Event] -> [Event]
-events _ es = lefts (enter . movement . Right <$> es)
+parseEvents :: [SDL.Event] -> [Event]
+parseEvents es = lefts (enter . movement . Right <$> es)

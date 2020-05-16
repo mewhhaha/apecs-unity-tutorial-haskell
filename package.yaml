@@ -28,8 +28,6 @@ dependencies:
   - typelits-witnesses
   - text
   - StateVar
-library:
-  source-dirs: src
 
 ghc-options:
   - -threaded
@@ -39,10 +37,14 @@ ghc-options:
   - -fplugin=Polysemy.Plugin
   - -Wall
 
+library:
+  source-dirs: src
+
 executables:
   game-exe:
     source-dirs: app
     main: Main.hs
     dependencies:
       - game
+
 description: Please see the README on GitHub at <https://github.com/mewhhaha/apecs-unity-tutorial-haskell#readme>

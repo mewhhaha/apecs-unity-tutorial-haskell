@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Env
-  ( resources,
+  ( createEnv,
     Zombie (..),
     Vampire (..),
     Player (..),
@@ -92,8 +92,8 @@ obstacles sheet =
     mkRect32 (x, y) = mkRect x y (times32 1) (times32 1)
     make new damaged = Map.fromList [(C.ONew, mkRect32 new), (C.ODamaged, mkRect32 damaged)]
 
-resources :: Members [SDLFont, SDLImage, SDLMixer] r => Sem r Env.Env
-resources = do
+createEnv :: Environment Env.Env r => Sem r Env.Env
+createEnv = do
   loadedFont <- loadFont [16] $ folderFonts "PressStart2P-Regular.ttf"
   loadedSheet <- loadTexture $ folderSprites "Scavengers_SpriteSheet.png"
   let loadedProp = loadSheet32x32 (xy32 2 2) loadedSheet
@@ -102,7 +102,7 @@ resources = do
       loadedObstacle = obstacles loadedSheet
       playerAttack = loadASheet32x32 (xy32 0 5) loadedSheet
       playerIdle = loadASheet32x32 (xy32 0 0) loadedSheet
-      playerHurt = loadASheet32x32 (xy32 4 5) loadedSheet
+      playerHurt = loadASheet32x32 (xy32 6 5) loadedSheet
       vampireIdle = loadASheet32x32 (xy32 4 1) loadedSheet
       vampireAttack = loadASheet32x32 (xy32 4 5) loadedSheet
       zombieIdle = loadASheet32x32 (xy32 6 0) loadedSheet
