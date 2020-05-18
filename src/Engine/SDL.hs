@@ -14,6 +14,7 @@
 module Engine.SDL
   ( play,
     render,
+    Game,
     Environment,
   )
 where
@@ -48,28 +49,26 @@ renderTexture ::
 renderTexture r t mask pos =
   SDL.copy r t (fmap fromIntegral <$> mask) (Just $ fromIntegral <$> pos)
 
-type Engine r = Members [Embed IO, SDL, SDLFont, SDLImage, SDLWindow, SDLRenderer, SDLMixer] r
+type Engine r = Members [Embed IO, SDL, SDLWindow, SDLRenderer] r
 
-type Environment env r = Members [SDLFont, SDLImage, SDLMixer] r
+type Environment env r = Member SDLLoad r
+
+type Game env r = Members [Embed IO, Reader env, Loop, SDLRenderer, SDLWindow] r
 
 play ::
-  forall w r env.
+  forall env r w.
   (Engine r, Environment env r) =>
   w ->
   Sem r env ->
-  ((env, [SDL.Event], SDL.Renderer, SDL.Window, Double) -> System w w) ->
+  (forall q. Game env q => w -> Sem q w) ->
   Sem r ()
 play world createEnv game = do
-  r <- getRenderer
-  w <- getWindow
   setHintQuality
   env <- createEnv
-  let loop :: Members [Loop, Draw, Embed IO] q => w -> Sem q (Maybe w)
-      loop world' = do
-        dt <- deltaTime
-        es <- events
+  let loop w = do
+        es <- getEvents
         clear $ V4 maxBound maxBound maxBound maxBound
-        next <- embed (runWith world' (game (env, es, r, w, dt)))
+        next <- runReader env $ game w
         present
         return $ if any isQuitEvent es then Nothing else Just next
   void . runDraw . runState @Double 0 . runLoop world $ loop

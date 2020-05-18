@@ -16,6 +16,7 @@
 module Engine.SDL.Effect where
 
 import qualified Apecs
+import Apecs (SystemT, runWith)
 import Control.Monad.Identity
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
@@ -41,7 +42,21 @@ makeSem ''SDL
 
 runSDL :: Members [Resource, Embed IO] r => Sem (SDL : r) a -> Sem r a
 runSDL =
-  bracket (SDL.initialize [SDL.InitVideo, SDL.InitAudio]) (pure SDL.quit) . const
+  bracket
+    ( do
+        SDL.initialize [SDL.InitVideo, SDL.InitAudio]
+        SDL.Image.initialize []
+        SDL.Font.initialize
+        SDL.Mixer.initialize []
+        SDL.Mixer.openAudio SDL.Mixer.defaultAudio 256
+    )
+    ( const $ do
+        SDL.Mixer.quit
+        SDL.Font.quit
+        SDL.Image.quit
+        SDL.quit
+    )
+    . const
     . interpret
       ( \case
           SetHintQuality -> SDL.HintRenderScaleQuality $= SDL.ScaleNearest
@@ -90,53 +105,28 @@ runSDLRenderer sem = do
       )
       sem
 
-data SDLImage m a where
-  LoadTexture :: FilePath -> SDLImage m Texture
+data SDLLoad m a where
+  LoadTexture :: FilePath -> SDLLoad m Texture
+  LoadAudio :: SDL.Mixer.Loadable a => FilePath -> SDLLoad m a
+  LoadAudioRaw :: FilePath -> SDLLoad m ByteString
+  LoadFont :: [SDL.Font.PointSize] -> FilePath -> SDLLoad m (Map.Map SDL.Font.PointSize SDL.Font.Font)
 
-makeSem ''SDLImage
+makeSem ''SDLLoad
 
-runSDLImage :: Members [Resource, Embed IO, SDL, SDLRenderer] r => Sem (SDLImage : r) a -> Sem r a
-runSDLImage =
-  bracket (SDL.Image.initialize []) (pure SDL.Image.quit) . const
-    . interpret
-      ( \case
-          LoadTexture fp -> do
-            r <- getRenderer
-            t <- SDL.Image.loadTexture r fp
-            i <- SDL.queryTexture t
-            pure $ mkTexture t i
-      )
-
-data SDLFont m a where
-  LoadFont :: [SDL.Font.PointSize] -> FilePath -> SDLFont m (Map.Map SDL.Font.PointSize SDL.Font.Font)
-
-makeSem ''SDLFont
-
-runSDLFont :: Members [Resource, Embed IO, SDL] r => Sem (SDLFont : r) a -> Sem r a
-runSDLFont =
-  bracket SDL.Font.initialize (pure SDL.Font.quit) . const
-    . interpret
-      ( \case
-          LoadFont sizes fp -> do
-            fonts <- mapM (SDL.Font.load fp) sizes
-            return . Map.fromList $ zip sizes fonts
-      )
-
-data SDLMixer m a where
-  LoadAudio :: SDL.Mixer.Loadable a => FilePath -> SDLMixer m a
-  LoadAudioRaw :: FilePath -> SDLMixer m ByteString
-
-makeSem ''SDLMixer
-
-runSDLMixer :: Members [Resource, Embed IO, SDL] r => Sem (SDLMixer : r) a -> Sem r a
-runSDLMixer sem = bracket (SDL.Mixer.initialize []) (pure SDL.Mixer.quit) . const $ do
-  SDL.Mixer.openAudio SDL.Mixer.defaultAudio 256
-  interpret
-    ( \case
-        LoadAudio fp -> SDL.Mixer.load fp
-        LoadAudioRaw fp -> embed (ByteString.readFile fp)
-    )
-    sem
+runSDLLoad :: Members [SDL, SDLRenderer, Embed IO] r => Sem (SDLLoad : r) a -> Sem r a
+runSDLLoad =
+  interpret $
+    \case
+      LoadTexture fp -> do
+        r <- getRenderer
+        t <- SDL.Image.loadTexture r fp
+        i <- SDL.queryTexture t
+        pure $ mkTexture t i
+      LoadFont sizes fp -> do
+        fonts <- mapM (SDL.Font.load fp) sizes
+        return . Map.fromList $ zip sizes fonts
+      LoadAudio fp -> SDL.Mixer.load fp
+      LoadAudioRaw fp -> embed (ByteString.readFile fp)
 
 data Draw m a where
   Clear :: V4 Word8 -> Draw m ()
@@ -158,7 +148,7 @@ runDraw sem = do
 
 data Loop m a where
   DeltaTime :: Loop m Double
-  Events :: Loop m [SDL.Event]
+  GetEvents :: Loop m [SDL.Event]
 
 makeSem ''Loop
 
@@ -172,7 +162,7 @@ runLoop a sem = do
     interpret
       ( \case
           DeltaTime -> return $ curr - prev
-          Events -> return events
+          GetEvents -> return events
       )
       (sem a)
   case result of

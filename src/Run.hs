@@ -19,7 +19,6 @@ import Apecs
     Members,
     Not (..),
     Set,
-    ask,
     cfold,
     cfoldM,
     cmap,
@@ -46,21 +45,20 @@ import Data.Maybe (catMaybes, mapMaybe)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Draw (drawSystem)
-import Engine.SDL (play)
+import Engine.SDL (Game, play)
 import Engine.SDL.Effect
-import Engine.SDL.Internal
 import Env (createEnv)
 import qualified Env
 import Event (Event (..), parseEvents)
 import Game.Component
 import Game.World (All, System', World, initWorld)
-import Helper.Extra (eitherIf, entitiesAt, getAny, hasAny, maybeIf, toTime, whenJust)
+import Helper.Extra (eitherIf, entitiesAt, getAny, getWorld, hasAny, maybeIf, toTime, whenJust)
 import Helper.Happened (isPlayerDie, isPlayerWin, isRestart)
 import Linear (V2 (..))
-import Polysemy (runM)
+import Polysemy (embed, runM)
+import qualified Polysemy
+import Polysemy.Reader (ask)
 import Polysemy.Resource (runResource)
-import Polysemy.State (runState)
-import qualified SDL
 import System.Random (RandomGen, mkStdGen, newStdGen, random, randomR, randomRs, randoms, setStdGen, split)
 
 dirToV2 :: Direction -> Position
@@ -282,8 +280,8 @@ stepSystem dt events = do
   removeDead
   tick dt
   stepAnimation dt
-  game <- get global
-  case game of
+  gameState <- get global
+  case gameState of
     GamePlay -> do
       shouldUpdate <- evalNext events
       whenJust shouldUpdate $ \next -> do
@@ -312,14 +310,14 @@ changeSystem = do
     _ -> thisLevel
   where
     thisLevel :: System' World
-    thisLevel = ask
+    thisLevel = getWorld
     zeroLevel :: System' World
     zeroLevel =
       lift $ do
         w <- initWorld
         runWith w $ do
           initialize 0
-          ask
+          getWorld
     nextLevel :: System' World
     nextLevel = do
       (CLevel level) <- get global
@@ -329,7 +327,7 @@ changeSystem = do
         runWith w $ do
           initialize (level + 1)
           cmap $ \(_ :: CPlayer) -> Just (CStat Stat {life = life + 1})
-          ask
+          getWorld
 
 windowSize :: (Int, Int)
 windowSize = (640, 480)
@@ -337,22 +335,26 @@ windowSize = (640, 480)
 windowTitle :: Text.Text
 windowTitle = "My game"
 
-game :: (Env.Env, [SDL.Event], SDL.Renderer, SDL.Window, Double) -> System' World
-game (env, events, r, w, dt) = do
-  stepSystem dt (parseEvents events)
-  drawSystem env w r
-  changeSystem
+game :: Game Env.Env r => World -> Polysemy.Sem r World
+game w = do
+  dt <- deltaTime
+  es <- getEvents
+  window <- getWindow
+  renderer <- getRenderer
+  env <- ask @Env.Env
+  embed $ runWith w $ do
+    stepSystem dt (parseEvents es)
+    drawSystem env window renderer
+    changeSystem
 
 run :: World -> IO ()
 run w = do
-  w' <- runWith w (initialize 0 >> ask)
+  w' <- runWith w (initialize 0 >> getWorld)
   void
     $ runM
       . runResource
       . runSDL
-      . runSDLFont
-      . runSDLMixer
       . runSDLWindow windowTitle windowSize
       . runSDLRenderer
-      . runSDLImage
+      . runSDLLoad
     $ play w' createEnv game
