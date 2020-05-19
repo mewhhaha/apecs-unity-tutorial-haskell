@@ -31,9 +31,18 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 [https://github.com/haskell-game/sdl2](https://github.com/haskell-game/sdl2)  
 [https://hackage.haskell.org/package/sdl2-image](https://hackage.haskell.org/package/sdl2-image)  
 [https://hackage.haskell.org/package/sdl2-mixer](https://hackage.haskell.org/package/sdl2-mixer)  
-[https://hackage.haskell.org/package/sdl2-ttf](https://hackage.haskell.org/package/sdl2-ttf)  
+[https://hackage.haskell.org/package/sdl2-ttf](https://hackage.haskell.org/package/sdl2-ttf)
 
 - Couldn't have done it without the SDL2 bindings
+
+[https://hackage.haskell.org/package/rapid-0.1.4/docs/Rapid.html](https://hackage.haskell.org/package/rapid-0.1.4/docs/Rapid.html)  
+[https://github.com/ndmitchell/ghcid](https://github.com/ndmitchell/ghcid)
+
+- For hot reloading
+
+[https://hackage.haskell.org/package/polysemy](https://hackage.haskell.org/package/polysemy)
+
+- Just because I wanted to try it out (Used mainly in Engine.\*)
 
 ## Building on Windows
 
@@ -45,12 +54,20 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 
 ### 2. Build and run
 
-To play you have to move the built binary to the `game` folder and run it from that directory.
+I couldn't make `stack run` work, so the easiest way to play it is to do either
 
-`stack build --copy-bins --local-bin-path game`
+- Execute `stack ghci` and run `main`
+- Execute `stack build --copy-bins --local-bin-path .` and run the built binary (`game-exe`)
 
-run `game-exe` in the game folder
+### 3. Development
 
-### 3. Thanks
+For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs/Rapid.html) and [ghcid](https://github.com/ndmitchell/ghcid) for some kind of "hot reloading". `Rapid` allows one to persist state (eg. window, renderer and game state) across `ghci` reloads and `ghcid` a simple way of recompiling changed code and running the `Rapid` entrypoint.
+
+- Install `ghcid` by executing `stack install ghcid`
+- Execute `ghcid -c stack ghci -W -T update`
+  - Window should appear and update whenever there is a code change
+  - Window will freeze if you have broken code and kick in again when you fixed it
+
+### 4. Thanks
 
 If I forgot something or you think something should be added just open an issue! Free to do whatever with my code, but the assets aren't mine.
