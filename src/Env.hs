@@ -20,7 +20,7 @@ import qualified Data.ByteString as ByteString
 import qualified Data.Map as Map
 import Engine.SDL (Static)
 import Engine.SDL.Effect
-import Engine.SDL.Internal
+import Engine.SDL.Internal hiding (sheet)
 import GHC.TypeNats
 import qualified Game.Component as C
 import Polysemy

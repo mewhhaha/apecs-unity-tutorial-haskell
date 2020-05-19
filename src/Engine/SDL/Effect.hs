@@ -57,17 +57,17 @@ data SDL m a where
 
 makeSem ''SDL
 
-runSDL :: Members [Resource, Embed IO] r => Sem (SDL : r) a -> Sem r a
+runSDL :: Members [Rapid, Resource, Embed IO] r => Sem (SDL : r) a -> Sem r a
 runSDL =
   bracket
-    ( do
+    ( createRef "SDL" $ do
         SDL.initialize [SDL.InitVideo, SDL.InitAudio]
         SDL.Image.initialize []
         SDL.Font.initialize
         SDL.Mixer.initialize []
         SDL.Mixer.openAudio SDL.Mixer.defaultAudio 256
     )
-    ( const $ do
+    ( const . unlessRapid $ do
         SDL.Mixer.quit
         SDL.Font.quit
         SDL.Image.quit
@@ -95,7 +95,7 @@ runSDLWindow title (x, y) sem = bracket before after $ \w -> do
     )
     sem
   where
-    before = createRef "win" (SDL.createWindow title p)
+    before = createRef "window" (SDL.createWindow title p)
     after = unlessRapid . SDL.destroyWindow
     p = SDL.defaultWindow {SDL.windowInitialSize = z}
     z = SDL.V2 (fromIntegral x) (fromIntegral y)

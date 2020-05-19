@@ -2,7 +2,6 @@ module Event (parseEvents, Event (..)) where
 
 import Control.Monad (when)
 import Data.Either (lefts)
-import qualified Env
 import Game.Component (Direction (..))
 import qualified SDL
 

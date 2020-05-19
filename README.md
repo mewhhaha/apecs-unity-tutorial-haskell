@@ -64,9 +64,11 @@ I couldn't make `stack run` work, so the easiest way to play it is to do either
 For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs/Rapid.html) and [ghcid](https://github.com/ndmitchell/ghcid) for some kind of "hot reloading". `Rapid` allows one to persist state (eg. window, renderer and game state) across `ghci` reloads and `ghcid` a simple way of recompiling changed code and running the `Rapid` entrypoint.
 
 - Install `ghcid` by executing `stack install ghcid`
-- Execute `ghcid -c stack ghci -W -T update`
+- Execute `ghcid`
+  - Passed flags can be found in `.ghcid`
   - Window should appear and update whenever there is a code change
   - Window will freeze if you have broken code and kick in again when you fixed it
+  - Sometimes breaks
 
 ### 4. Thanks
 

@@ -46,7 +46,7 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Draw (drawSystem)
 import Engine.SDL (Game, play)
-import Engine.SDL.Effect
+import Engine.SDL.Effect (deltaTime, getEvents, getRenderer, getWindow, runRapid, runSDL, runSDLLoad, runSDLRenderer, runSDLWindow)
 import Env (createEnv)
 import qualified Env
 import Event (Event (..), parseEvents)
@@ -59,7 +59,7 @@ import Polysemy (embed, runM)
 import qualified Polysemy
 import Polysemy.Reader (ask)
 import Polysemy.Resource (runResource)
-import Rapid
+import qualified Rapid
 import System.Random (RandomGen, mkStdGen, newStdGen, random, randomR, randomRs, randoms, setStdGen, split)
 
 dirToV2 :: Direction -> Position
@@ -187,7 +187,7 @@ stepPlayer next =
     attacking <-
       case attack of
         Just target -> do
-          hurt target 1
+          hurt target 100
           record PlayerAttack
           pure $ Just (CPlayer [PAttack])
         Nothing -> pure $ Just (CPlayer [])
