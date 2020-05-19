@@ -67,7 +67,6 @@ For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs
 - Execute `ghcid`
   - Passed flags can be found in `.ghcid`
   - Window should appear and update whenever there is a code change
-  - Window will freeze if you have broken code and kick in again when you fixed it
   - Sometimes breaks
 
 ### 4. Thanks
