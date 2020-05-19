@@ -187,7 +187,7 @@ stepPlayer next =
     attacking <-
       case attack of
         Just target -> do
-          hurt target 100
+          hurt target 1
           record PlayerAttack
           pure $ Just (CPlayer [PAttack])
         Nothing -> pure $ Just (CPlayer [])
@@ -240,7 +240,7 @@ stepEnemies =
 
 stepItems :: Map.Map Position Entity -> System' ()
 stepItems pickers = do
-  let fruit = 20
+  let fruit = 10
       soda = 20
   pick @CFruit (FruitPicked fruit) fruit
   pick @CSoda (SodaPicked soda) soda
