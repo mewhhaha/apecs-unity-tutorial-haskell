@@ -19,7 +19,6 @@ import Apecs
     Members,
     Not (..),
     Set,
-    ask,
     cfold,
     cfoldM,
     cmap,
@@ -44,16 +43,23 @@ import Data.List (sortBy)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, mapMaybe)
 import qualified Data.Set as Set
-import qualified Draw
-import Engine.SDL (play)
+import qualified Data.Text as Text
+import Draw (drawSystem)
+import Engine.SDL (Game, play)
+import Engine.SDL.Effect (deltaTime, getEvents, getRenderer, getWindow, runRapid, runSDL, runSDLLoad, runSDLRenderer, runSDLWindow)
+import Env (createEnv)
 import qualified Env
-import Event (Event (..))
-import qualified Event
+import Event (Event (..), parseEvents)
 import Game.Component
 import Game.World (All, System', World, initWorld)
-import Helper.Extra (eitherIf, entitiesAt, getAny, hasAny, maybeIf, toTime, whenJust)
+import Helper.Extra (eitherIf, entitiesAt, getAny, getWorld, hasAny, maybeIf, toTime, whenJust)
 import Helper.Happened (isPlayerDie, isPlayerWin, isRestart)
 import Linear (V2 (..))
+import Polysemy (embed, runM)
+import qualified Polysemy
+import Polysemy.Reader (ask)
+import Polysemy.Resource (runResource)
+import qualified Rapid
 import System.Random (RandomGen, mkStdGen, newStdGen, random, randomR, randomRs, randoms, setStdGen, split)
 
 dirToV2 :: Direction -> Position
@@ -181,7 +187,7 @@ stepPlayer next =
     attacking <-
       case attack of
         Just target -> do
-          hurt target 1
+          hurt target 100
           record PlayerAttack
           pure $ Just (CPlayer [PAttack])
         Nothing -> pure $ Just (CPlayer [])
@@ -270,13 +276,13 @@ evalNext events =
         dir (InputMove d) = Just (dirToV2 d)
         dir _ = Nothing
 
-step :: Env.Env -> Double -> [Event] -> System' ()
-step _ dt events = do
+stepSystem :: Double -> [Event] -> System' ()
+stepSystem dt events = do
   removeDead
   tick dt
   stepAnimation dt
-  game <- get global
-  case game of
+  gameState <- get global
+  case gameState of
     GamePlay -> do
       shouldUpdate <- evalNext events
       whenJust shouldUpdate $ \next -> do
@@ -292,8 +298,8 @@ step _ dt events = do
     getEntities :: forall c. (Members World IO c, Get World IO c) => System' (Map.Map Position Entity)
     getEntities = cfold (\acc (_ :: c, e, CPosition pos) -> Map.insert pos e acc) mempty
 
-change :: Env.Env -> System' World
-change _ = do
+changeSystem :: System' World
+changeSystem = do
   (CLatest latest) <- get global
   let win = any isPlayerWin latest
       restart = any isRestart latest
@@ -305,14 +311,14 @@ change _ = do
     _ -> thisLevel
   where
     thisLevel :: System' World
-    thisLevel = ask
+    thisLevel = getWorld
     zeroLevel :: System' World
     zeroLevel =
       lift $ do
         w <- initWorld
         runWith w $ do
           initialize 0
-          ask
+          getWorld
     nextLevel :: System' World
     nextLevel = do
       (CLevel level) <- get global
@@ -322,9 +328,36 @@ change _ = do
         runWith w $ do
           initialize (level + 1)
           cmap $ \(_ :: CPlayer) -> Just (CStat Stat {life = life + 1})
-          ask
+          getWorld
 
-run :: World -> IO ()
-run w = do
-  w' <- runWith w (initialize 0 >> ask)
-  play w' Env.resources Event.events step Draw.draw change
+windowSize :: (Int, Int)
+windowSize = (640, 480)
+
+windowTitle :: Text.Text
+windowTitle = "My game"
+
+game :: Game Env.Env r => World -> Polysemy.Sem r World
+game w = do
+  dt <- deltaTime
+  es <- getEvents
+  window <- getWindow
+  renderer <- getRenderer
+  env <- ask @Env.Env
+  embed $ runWith w $ do
+    stepSystem dt (parseEvents es)
+    drawSystem env window renderer
+    changeSystem
+
+run :: Maybe (Rapid.Rapid String) -> IO ()
+run dev = do
+  w <- initWorld
+  w' <- runWith w (initialize 0 >> getWorld)
+  void
+    $ runM
+      . runRapid dev
+      . runResource
+      . runSDL
+      . runSDLWindow windowTitle windowSize
+      . runSDLRenderer
+      . runSDLLoad
+    $ play w' createEnv game

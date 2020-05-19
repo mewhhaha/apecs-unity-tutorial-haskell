@@ -35,11 +35,14 @@ eitherIf f a = if f a then Right a else Left ()
 maybeIf :: (a -> Bool) -> a -> Maybe a
 maybeIf f a = if f a then Just a else Nothing
 
-hasAny :: forall c. Get World IO c => [Entity] -> System' Bool
+hasAny :: forall c. (Get World IO c) => [Entity] -> System' Bool
 hasAny = fmap (not . null) . filterM (`exists` Proxy @c)
 
-getAny :: forall c. Get World IO c => [Entity] -> System' (Maybe Entity)
+getAny :: forall c. (Get World IO c) => [Entity] -> System' (Maybe Entity)
 getAny = fmap listToMaybe . filterM (`exists` Proxy @c)
 
 entitiesAt :: Position -> System' [Entity]
 entitiesAt pos = withReactive $ ixLookup (CPosition pos)
+
+getWorld :: System' World
+getWorld = ask

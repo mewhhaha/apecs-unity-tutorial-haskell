@@ -12,7 +12,6 @@
 
 module Engine.SDL.Internal where
 
-import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Fixed (mod')
 import qualified Data.Map.Strict as Map
@@ -25,9 +24,7 @@ import GHC.TypeLits.Compare (isLE)
 import GHC.TypeNats
 import Linear (V2 (..), V4 (..))
 import qualified SDL
-import SDL (($=))
 import qualified SDL.Font
-import qualified SDL.Image
 
 data Texture = Texture SDL.Texture SDL.TextureInfo
 
@@ -133,62 +130,12 @@ mkClips (w, h) (x, y) (Texture _ ti) = Map.fromList $ zip es (rect <$> xs)
         x' = offset `mod` tw
         y' = fromIntegral y + (offset `div` tw) * h'
 
-withSDL :: (MonadIO m) => m a -> m ()
-withSDL op = do
-  SDL.initialize [SDL.InitVideo, SDL.InitAudio]
-  void op
-  SDL.quit
-
-withSDLImage :: (MonadIO m) => m a -> m ()
-withSDLImage op = do
-  SDL.Image.initialize []
-  void op
-  SDL.Image.quit
-
-withSDLFont :: (MonadIO m) => m a -> m ()
-withSDLFont op = do
-  SDL.Font.initialize
-  void op
-  SDL.Font.quit
-
-withWindow :: (MonadIO m) => Text -> (Int, Int) -> (SDL.Window -> m a) -> m ()
-withWindow title (x, y) op = do
-  w <- SDL.createWindow title p
-  SDL.showWindow w
-  void $ op w
-  SDL.destroyWindow w
-  where
-    p = SDL.defaultWindow {SDL.windowInitialSize = z}
-    z = SDL.V2 (fromIntegral x) (fromIntegral y)
-
-withRenderer :: (MonadIO m) => SDL.Window -> (SDL.Renderer -> m a) -> m ()
-withRenderer w op = do
-  r <- SDL.createRenderer w (-1) rendererConfig
-  void $ op r
-  SDL.destroyRenderer r
-
-rendererConfig :: SDL.RendererConfig
-rendererConfig =
-  SDL.RendererConfig
-    { SDL.rendererType = SDL.AcceleratedVSyncRenderer,
-      SDL.rendererTargetTexture = False
-    }
-
 isContinue :: Maybe SDL.Event -> Bool
 isContinue = maybe True (not . isQuitEvent)
 
 isQuitEvent :: SDL.Event -> Bool
 isQuitEvent (SDL.Event _t SDL.QuitEvent) = True
 isQuitEvent _ = False
-
-setHintQuality :: (MonadIO m) => m ()
-setHintQuality = SDL.HintRenderScaleQuality $= SDL.ScaleNearest
-
-loadTexture :: (MonadIO m) => SDL.Renderer -> FilePath -> m Texture
-loadTexture r p = do
-  t <- SDL.Image.loadTexture r p
-  i <- SDL.queryTexture t
-  pure $ mkTexture t i
 
 destroyTexture :: (MonadIO m) => Texture -> m ()
 destroyTexture (Texture t _) = SDL.destroyTexture t

@@ -10,7 +10,7 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Draw
-  ( draw,
+  ( drawSystem,
   )
 where
 
@@ -143,8 +143,8 @@ drawUI w r = do
       clearBlack
       rows screenSize els
 
-draw :: Env.Env -> SDL.Window -> SDL.Renderer -> System' ()
-draw Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, prop, misc, font} w r = do
+drawSystem :: Env.Env -> SDL.Window -> SDL.Renderer -> System' ()
+drawSystem Env.Env {player, vampire, zombie, ground, music, enemy, wall, obstacle, prop, misc, font} w r = do
   isMusicPlay <- SDL.Mixer.playingMusic
   unless isMusicPlay (playMusic music)
   (CLatest latest) <- get global

@@ -1,20 +1,35 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Engine.SDL
   ( play,
     render,
+    Game,
+    Static,
   )
 where
 
-import Apecs (System, runWith)
+import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
-import Engine.SDL.Internal (Drawable, Texture (..), getFrame, getTexture, isQuitEvent, mkRect, setHintQuality, withRenderer, withSDL, withSDLFont, withSDLImage, withWindow)
+import Engine.SDL.Effect
+import Engine.SDL.Internal
+import Linear (V4 (..))
+import Polysemy
+import Polysemy.Reader
+import Polysemy.State
 import qualified SDL
-import SDL (($=), V2 (..), V4 (..))
-import qualified SDL.Mixer
-
-windowSize :: Integral a => (a, a)
-windowSize = (640, 480)
+import SDL (V2 (..))
+import Type.Reflection
 
 render :: (MonadIO m, Integral p, Drawable a) => SDL.Renderer -> V2 p -> a -> m ()
 render r (V2 x y) s = renderTexture r t f (mkRect (fromIntegral x) (fromIntegral y) w h)
@@ -34,47 +49,27 @@ renderTexture ::
 renderTexture r t mask pos =
   SDL.copy r t (fmap fromIntegral <$> mask) (Just $ fromIntegral <$> pos)
 
-loop :: Double -> a -> (Double -> a -> IO (Bool, a)) -> IO ()
-loop prev a op = do
-  time <- SDL.time
-  (quit, a') <- op (time - prev) a
-  if quit then pure () else loop time a' op
+type Engine r = Members [Embed IO, Rapid, SDL, SDLWindow, SDLRenderer] r
+
+type Static env r = Member SDLLoad r
+
+type Game env r = Members [Embed IO, Reader env, Loop, SDLRenderer, SDLWindow] r
 
 play ::
+  forall env r w.
+  (Typeable w, Engine r, Static env r) =>
   w ->
-  -- | Environment function
-  (SDL.Renderer -> IO env) ->
-  -- | Event handling function
-  (env -> [SDL.Event] -> as) ->
-  -- | Stepping function
-  (env -> Double -> as -> System w ()) ->
-  -- | Drawing function
-  (env -> SDL.Window -> SDL.Renderer -> System w ()) ->
-  -- | Change function
-  (env -> System w w) ->
-  IO ()
-play world createEnv handleEvents stepSystem drawSystem changeSystem =
-  withSDL
-    . withSDLImage
-    . withSDLFont
-    . SDL.Mixer.withAudio SDL.Mixer.defaultAudio 256
-    $ do
-      setHintQuality
-      withWindow "My game" windowSize $ \w ->
-        withRenderer w $ \r -> do
-          env <- createEnv r
-          loop 0 world $
-            \dt curr -> do
-              events <- SDL.pollEvents
-              let as = handleEvents env events
-              next <-
-                runWith
-                  curr
-                  $ do
-                    stepSystem env dt as
-                    SDL.rendererDrawColor r $= SDL.V4 maxBound maxBound maxBound maxBound
-                    SDL.clear r
-                    drawSystem env w r
-                    SDL.present r
-                    changeSystem env
-              return (any isQuitEvent events, next)
+  Sem r env ->
+  (forall q. Game env q => w -> Sem q w) ->
+  Sem r ()
+play world createEnv game = do
+  world' <- createRef "world" (pure world)
+  setHintQuality
+  env <- createEnv
+  let loop w = do
+        es <- getEvents
+        clear $ V4 maxBound maxBound maxBound maxBound
+        next <- runReader env $ game w
+        present
+        return $ if any isQuitEvent es then Nothing else Just next
+  void . runDraw . runState @Double 0 . runLoop world' $ loop

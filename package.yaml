@@ -11,6 +11,8 @@ license: null
 
 dependencies:
   - base >= 4.7 && < 5
+  - polysemy
+  - polysemy-plugin
   - sdl2
   - sdl2-image
   - sdl2-mixer
@@ -22,19 +24,22 @@ dependencies:
   - mtl
   - array
   - filepath
+  - rapid
   - bytestring
   - typelits-witnesses
   - text
   - StateVar
-library:
-  source-dirs: src
 
 ghc-options:
   - -threaded
   - -rtsopts
   - -with-rtsopts=-N
   - -O2
+  - -fplugin=Polysemy.Plugin
   - -Wall
+
+library:
+  source-dirs: src
 
 executables:
   game-exe:
@@ -42,4 +47,5 @@ executables:
     main: Main.hs
     dependencies:
       - game
+
 description: Please see the README on GitHub at <https://github.com/mewhhaha/apecs-unity-tutorial-haskell#readme>
