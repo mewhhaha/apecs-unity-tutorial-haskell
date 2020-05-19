@@ -5,6 +5,7 @@ packages:
 
 extra-deps:
   - sdl2-2.3.0.1
+  - rapid-0.1.4@sha256:570dbbaf2d57d5de8ed239cae8aad3fcef59737e31246ea7e6999d46d41ae3da,1768
   - git: https://github.com/haskell-game/sdl2-image.git
     commit: 382395c763b473032721c71921b5c9241142178f
 allow-newer: true

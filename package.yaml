@@ -24,6 +24,7 @@ dependencies:
   - mtl
   - array
   - filepath
+  - rapid
   - bytestring
   - typelits-witnesses
   - text

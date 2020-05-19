@@ -18,7 +18,7 @@ where
 
 import qualified Data.ByteString as ByteString
 import qualified Data.Map as Map
-import Engine.SDL (Environment)
+import Engine.SDL (Static)
 import Engine.SDL.Effect
 import Engine.SDL.Internal
 import GHC.TypeNats
@@ -92,7 +92,7 @@ obstacles sheet =
     mkRect32 (x, y) = mkRect x y (times32 1) (times32 1)
     make new damaged = Map.fromList [(C.ONew, mkRect32 new), (C.ODamaged, mkRect32 damaged)]
 
-createEnv :: Environment Env.Env r => Sem r Env.Env
+createEnv :: Static Env.Env r => Sem r Env.Env
 createEnv = do
   loadedFont <- loadFont [16] $ folderFonts "PressStart2P-Regular.ttf"
   loadedSheet <- loadTexture $ folderSprites "Scavengers_SpriteSheet.png"

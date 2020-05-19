@@ -15,11 +15,10 @@ module Engine.SDL
   ( play,
     render,
     Game,
-    Environment,
+    Static,
   )
 where
 
-import Apecs (System, runWith)
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
 import Engine.SDL.Effect
@@ -30,6 +29,7 @@ import Polysemy.Reader
 import Polysemy.State
 import qualified SDL
 import SDL (V2 (..))
+import Type.Reflection
 
 render :: (MonadIO m, Integral p, Drawable a) => SDL.Renderer -> V2 p -> a -> m ()
 render r (V2 x y) s = renderTexture r t f (mkRect (fromIntegral x) (fromIntegral y) w h)
@@ -49,20 +49,21 @@ renderTexture ::
 renderTexture r t mask pos =
   SDL.copy r t (fmap fromIntegral <$> mask) (Just $ fromIntegral <$> pos)
 
-type Engine r = Members [Embed IO, SDL, SDLWindow, SDLRenderer] r
+type Engine r = Members [Embed IO, Rapid, SDL, SDLWindow, SDLRenderer] r
 
-type Environment env r = Member SDLLoad r
+type Static env r = Member SDLLoad r
 
 type Game env r = Members [Embed IO, Reader env, Loop, SDLRenderer, SDLWindow] r
 
 play ::
   forall env r w.
-  (Engine r, Environment env r) =>
+  (Typeable w, Engine r, Static env r) =>
   w ->
   Sem r env ->
   (forall q. Game env q => w -> Sem q w) ->
   Sem r ()
 play world createEnv game = do
+  world' <- createRef "world" (pure world)
   setHintQuality
   env <- createEnv
   let loop w = do
@@ -71,4 +72,4 @@ play world createEnv game = do
         next <- runReader env $ game w
         present
         return $ if any isQuitEvent es then Nothing else Just next
-  void . runDraw . runState @Double 0 . runLoop world $ loop
+  void . runDraw . runState @Double 0 . runLoop world' $ loop

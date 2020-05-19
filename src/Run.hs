@@ -59,6 +59,7 @@ import Polysemy (embed, runM)
 import qualified Polysemy
 import Polysemy.Reader (ask)
 import Polysemy.Resource (runResource)
+import Rapid
 import System.Random (RandomGen, mkStdGen, newStdGen, random, randomR, randomRs, randoms, setStdGen, split)
 
 dirToV2 :: Direction -> Position
@@ -347,11 +348,13 @@ game w = do
     drawSystem env window renderer
     changeSystem
 
-run :: World -> IO ()
-run w = do
+run :: Maybe (Rapid.Rapid String) -> IO ()
+run dev = do
+  w <- initWorld
   w' <- runWith w (initialize 0 >> getWorld)
   void
     $ runM
+      . runRapid dev
       . runResource
       . runSDL
       . runSDLWindow windowTitle windowSize
