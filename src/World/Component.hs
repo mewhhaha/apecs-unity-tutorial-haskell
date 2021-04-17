@@ -34,6 +34,7 @@ data CPlayer = CPlayer
 instance Apecs.Component CPlayer where type Storage CPlayer = Apecs.Unique CPlayer
 
 data Enemy = Zombie | Vampire | Obstacle
+  deriving (Eq)
 
 newtype CEnemy = CEnemy Enemy
 
@@ -210,7 +211,7 @@ instance Monoid CHappenings where
 
 -- Draw components
 
-data LerpPosition = LerpPosition {old :: Position, current :: Position}
+data LerpPosition = LerpPosition {lerp :: Double, old :: Position, current :: Position}
 
 newtype CLerpPosition = CLerpPosition LerpPosition
 

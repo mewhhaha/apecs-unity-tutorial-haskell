@@ -103,6 +103,9 @@ playRandomChunk channel chunks = do
 musicChannel :: SDLMixer.Channel
 musicChannel = 3
 
+lerpSpeed :: Double
+lerpSpeed = 10
+
 system :: System' ()
 system = do
   (CScene scene) <- Apecs.get Apecs.global
@@ -119,19 +122,24 @@ system = do
       chunksChop <- mapM (resourceSound . ("audio" </>)) ["scavengers_chop1.ogg", "scavengers_chop2.ogg"]
       chunksFootstep <- mapM (resourceSound . ("audio" </>)) ["scavengers_footstep1.aif", "scavengers_footstep2.aif"]
       chunksFruit <- mapM (resourceSound . ("audio" </>)) ["scavengers_fruit1.aif", "scavengers_fruit2.aif"]
-      chunksEnemy <- mapM (resourceSound . ("audio" </>)) ["scavengers_enemy1.aif", "scavengers_enemy2.aif"]
+      chunksEnemyDie <- mapM (resourceSound . ("audio" </>)) ["scavengers_enemy2.aif"]
+      chunksEnemyAttack <- mapM (resourceSound . ("audio" </>)) ["scavengers_enemy1.aif"]
       chunksSoda <- mapM (resourceSound . ("audio" </>)) ["scavengers_soda1.ogg", "scavengers_soda2.ogg"]
       chunkMusic <- resourceSound ("audio" </> "scavengers_music.ogg")
 
       playingMusic <- SDLMixer.playing musicChannel
       pausedMusic <- SDLMixer.paused musicChannel
       when (not playingMusic || pausedMusic) $ do
-        SDLMixer.setVolume 20 chunkMusic
+        SDLMixer.setVolume 10 chunkMusic
         _ <- SDLMixer.playOn musicChannel 2 chunkMusic
         pass
 
       Apecs.cmap $ \(CAnimation animation) -> CAnimation (over timer (+ dt * view speed animation) animation)
-      Apecs.cmap $ \(CLerpPosition LerpPosition {..}, CPosition position) -> if position /= current then Right (CLerpPosition $ LerpPosition current position) else Left ()
+      Apecs.cmap $ \(CLerpPosition lerpPosition@LerpPosition {..}, CPosition position) ->
+        Just $
+          if position /= current
+            then CLerpPosition $ LerpPosition 0 current position
+            else CLerpPosition lerpPosition {lerp = min (lerp + dt * lerpSpeed) 1}
 
       let drawFrame frames n =
             let index = n `mod` length frames
@@ -148,13 +156,16 @@ system = do
           case (player, enemy) of
             (Just _, _) -> do
               playRandomChunk 0 chunksChop
+              Apecs.get target >>= \case
+                (Just (CEnemy e)) | elem e [Zombie, Vampire] -> playRandomChunk 2 chunksEnemyDie
+                _ -> pass
               Apecs.set source $ CAnimation playerAttackAnimation
             (_, Just (CEnemy Zombie)) -> do
-              playRandomChunk 2 chunksEnemy
+              playRandomChunk 2 chunksEnemyAttack
               Apecs.set source $ CAnimation zombieAttackAnimation
               Apecs.modify source $ \(CPlayer, CAnimation _) -> CAnimation playerHurtAnimation
             (_, Just (CEnemy Vampire)) -> do
-              playRandomChunk 2 chunksEnemy
+              playRandomChunk 2 chunksEnemyAttack
               Apecs.set source $ CAnimation vampireAttackAnimation
               Apecs.modify source $ \(CPlayer, CAnimation _) -> CAnimation playerHurtAnimation
             _ -> Apecs.set source $ CAnimation unchanged
@@ -181,9 +192,11 @@ system = do
           Fruit -> drawFrame pickupSprites 0 position
           Soda -> drawFrame pickupSprites 1 position
 
-      Apecs.cmapM $ \(CPosition position, CLerpPosition LerpPosition {..}, CAnimation animation, _ :: Apecs.Not CDead) -> do
+      Apecs.cmapM $ \(CLerpPosition LerpPosition {..}, CAnimation animation, _ :: Apecs.Not CDead) -> do
         let animationDone reel = floor (view timer animation) >= length reel
-            drawAnimation reel = drawSprite renderer spritesheet (Just (toList reel !! t)) (toRect position)
+            positionDelta = fromIntegral <$> (current - old)
+            positionOffset = floor <$> positionDelta * 32 * pure lerp
+            drawAnimation reel = drawSprite renderer spritesheet (Just (toList reel !! t)) (SDL.Rectangle (SDL.P $ old * 32 + positionOffset) 32)
               where
                 t = floor (view timer animation) `mod` length reel
 

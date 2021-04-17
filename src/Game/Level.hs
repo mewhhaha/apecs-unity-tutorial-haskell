@@ -58,7 +58,7 @@ newPlayer position life =
       CPlayer,
       CAnimation (Animation 0 PlayerIdle 7),
       CLife life,
-      CLerpPosition (LerpPosition position position)
+      CLerpPosition (LerpPosition 0 position position)
     )
     >> pass
 
@@ -71,7 +71,7 @@ newZombies = mapM_ new
           CEnemy Zombie,
           CAnimation (Animation 0 ZombieIdle 7),
           CLife 1,
-          CLerpPosition (LerpPosition position position)
+          CLerpPosition (LerpPosition 0 position position)
         )
 
 newVampires :: MonadIO m => [Position] -> Apecs.SystemT World m ()
@@ -83,7 +83,7 @@ newVampires = mapM_ new
           CEnemy Vampire,
           CAnimation (Animation 0 VampireIdle 7),
           CLife 1,
-          CLerpPosition (LerpPosition position position)
+          CLerpPosition (LerpPosition 0 position position)
         )
 
 newObstacles :: MonadIO m => [Position] -> Apecs.SystemT World m ()
