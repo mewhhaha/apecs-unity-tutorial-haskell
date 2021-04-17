@@ -7,7 +7,6 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 ## Issues during development
 
 - Some `.aif` files wouldn't work so converted them to `ogg`
-- Had issues described in [https://github.com/haskell-game/sdl2-mixer/issues/5](https://github.com/haskell-game/sdl2-mixer/issues/5) and solved it the same way, using a `Bytestring` instead of `Music`
 - Some documentation about SDL2 bindings that I had a hard time finding, but managed to find what I needed from the respective Github projects of the different bindings.
 
 ## Inspiration
