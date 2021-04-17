@@ -40,10 +40,6 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 
 - For hot reloading
 
-[https://hackage.haskell.org/package/polysemy](https://hackage.haskell.org/package/polysemy)
-
-- Just because I wanted to try it out (Used mainly in Engine.\*)
-
 ## Building on Windows
 
 ### 1. Install SDL2 via stack & pacman:
@@ -67,8 +63,6 @@ For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs
 - Execute `ghcid`
   - Passed flags can be found in `.ghcid`
   - Window should appear and update whenever there is a code change
-  - ~~Sometimes breaks~~ ~~Breaks all the time~~ Recompile code until window unfreezes
-  - Gets better after the first freeze 🤷
 
 ### 4. Thanks
 

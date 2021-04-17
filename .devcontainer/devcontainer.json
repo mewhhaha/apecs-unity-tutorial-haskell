@@ -1,0 +1,10 @@
+{
+  "name": "Haskell",
+  "dockerFile": "Dockerfile",
+  "appPort": 9000,
+  "postCreateCommand": "stack setup",
+  "extensions": [
+    "haskell.haskell",
+    "coenraads.bracket-pair-colorizer"
+  ]
+}

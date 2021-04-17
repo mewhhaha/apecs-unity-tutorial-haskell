@@ -1,0 +1,8 @@
+cradle:
+  stack:
+    - path: "src"
+      component: game:lib
+
+    - path: "app"
+      component: game:exe
+ 

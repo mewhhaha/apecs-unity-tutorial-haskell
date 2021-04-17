@@ -2,41 +2,88 @@ copyright: 2020 Jacob Torrång
 maintainer: kopatheonlyone@hotmail.com
 
 name: game
-version: 0.1.0.0
+version: 0.2.0.0
 extra-source-files:
   - README.md
 author: mewhhaha
 github: mewhhaha/apecs-unity-tutorial-haskell
 license: null
+description: Please see the README on GitHub at <https://github.com/mewhhaha/apecs-unity-tutorial-haskell#readme>
+
+default-extensions:
+  - NoImplicitPrelude
+  - StarIsType
+  - MonomorphismRestriction
+  - TraditionalRecordSyntax
+  - EmptyDataDecls
+  - ForeignFunctionInterface
+  - PatternGuards
+  - DoAndIfThenElse
+  - LambdaCase
+  - RelaxedPolyRec
+  - BangPatterns
+  - BinaryLiterals
+  - ConstrainedClassMethods
+  - ConstraintKinds
+  - DeriveDataTypeable
+  - DeriveFoldable
+  - DeriveFunctor
+  - DeriveGeneric
+  - DeriveLift
+  - DeriveTraversable
+  - EmptyCase
+  - EmptyDataDeriving
+  - ExistentialQuantification
+  - ExplicitForAll
+  - FlexibleContexts
+  - FlexibleInstances
+  - GADTSyntax
+  - GeneralisedNewtypeDeriving
+  - HexFloatLiterals
+  - ImportQualifiedPost
+  - InstanceSigs
+  - KindSignatures
+  - MultiParamTypeClasses
+  - NamedFieldPuns
+  - NamedWildCards
+  - NumericUnderscores
+  - PolyKinds
+  - PostfixOperators
+  - RankNTypes
+  - ScopedTypeVariables
+  - StandaloneDeriving
+  - StandaloneKindSignatures
+  - TupleSections
+  - TypeApplications
+  - OverloadedStrings
+  - TypeOperators
+  - TypeSynonymInstances
 
 dependencies:
   - base >= 4.7 && < 5
-  - polysemy
-  - polysemy-plugin
+  - relude
   - sdl2
   - sdl2-image
   - sdl2-mixer
   - sdl2-ttf
   - apecs
-  - linear
-  - containers
-  - random
-  - mtl
-  - array
-  - filepath
-  - rapid
-  - bytestring
-  - typelits-witnesses
+  - optics-core
+  - optics-th
   - text
-  - StateVar
+  - async
+  - array
+  - rapid
+  - mtl
+  - vector
+  - filepath
+  - random
+  - containers
 
 ghc-options:
-  - -threaded
-  - -rtsopts
-  - -with-rtsopts=-N
-  - -O2
-  - -fplugin=Polysemy.Plugin
   - -Wall
+  - -fwrite-ide-info
+  - -fexternal-interpreter
+  - -fvalidate-ide-info
 
 library:
   source-dirs: src
@@ -45,7 +92,11 @@ executables:
   game-exe:
     source-dirs: app
     main: Main.hs
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -O2
+      - +RTS -xn -RTS
     dependencies:
       - game
-
-description: Please see the README on GitHub at <https://github.com/mewhhaha/apecs-unity-tutorial-haskell#readme>

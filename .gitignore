@@ -5,3 +5,4 @@ bondle
 game-exe*
 *~
 stack.yaml.lock
+*.hie
