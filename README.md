@@ -64,6 +64,12 @@ For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs
   - Passed flags can be found in `.ghcid`
   - Window should appear and update whenever there is a code change
 
+### 4. Input
+* Main Menu
+  * ArrowUp, ArrowDown, Enter, Esc (Return to game)
+* Game
+  * ArrowUp, ArrowRight, ArrowDown, ArrowLeft, Esc (Return to menu)
+
 ### 4. Thanks
 
 If I forgot something or you think something should be added just open an issue! Free to do whatever with my code, but the assets aren't mine.
