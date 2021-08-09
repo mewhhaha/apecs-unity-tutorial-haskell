@@ -39,6 +39,16 @@ This is a project based on the Unity 2D Roguelike tutorial. It doesn't follow th
 
 - For hot reloading
 
+## Building on Linux
+
+### 1. Install SDL2 via apt
+
+`sudo apt install libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-gfx-dev libsdl2-net-dev`
+
+### 2. Build and run
+
+`stack run`
+
 ## Building on Windows
 
 ### 1. Install SDL2 via stack & pacman:
@@ -54,7 +64,7 @@ I couldn't make `stack run` work, so the easiest way to play it is to do either
 - Execute `stack ghci` and run `main`
 - Execute `stack build --copy-bins --local-bin-path .` and run the built binary (`game-exe`)
 
-### 3. Development
+## Development
 
 For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs/Rapid.html) and [ghcid](https://github.com/ndmitchell/ghcid) for some kind of "hot reloading". `Rapid` allows one to persist state (eg. window, renderer and game state) across `ghci` reloads and `ghcid` a simple way of recompiling changed code and running the `Rapid` entrypoint.
 
@@ -63,12 +73,12 @@ For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs
   - Passed flags can be found in `.ghcid`
   - Window should appear and update whenever there is a code change
 
-### 4. Input
+## Input
 * Main Menu
   * ArrowUp, ArrowDown, Enter, Esc (Return to game)
 * Game
   * ArrowUp, ArrowRight, ArrowDown, ArrowLeft, Esc (Return to menu)
 
-### 4. Thanks
+## Thanks
 
 If I forgot something or you think something should be added just open an issue! Free to do whatever with my code, but the assets aren't mine.
