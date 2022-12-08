@@ -79,6 +79,10 @@ For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs
 * Game
   * ArrowUp, ArrowRight, ArrowDown, ArrowLeft, Esc (Return to menu)
 
+## Other projects
+
+Check out [https://github.com/Simre1/hero](https://github.com/Simre1/hero) it seems like a really cool project!
+
 ## Thanks
 
 If I forgot something or you think something should be added just open an issue! Free to do whatever with my code, but the assets aren't mine.
