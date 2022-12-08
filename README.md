@@ -79,9 +79,9 @@ For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs
 * Game
   * ArrowUp, ArrowRight, ArrowDown, ArrowLeft, Esc (Return to menu)
 
-## Other projects
+## Related projects
 
-Check out [https://github.com/Simre1/hero](https://github.com/Simre1/hero) it seems like a really cool project!
+Check out [https://github.com/Simre1/hero](https://github.com/Simre1/hero), it's an ECS like APECS and seems like a really cool project! I hope to make this unity tutorial project for it as well.
 
 ## Thanks
 
