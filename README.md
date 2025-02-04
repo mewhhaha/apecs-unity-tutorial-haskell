@@ -83,6 +83,8 @@ For development use [rapid](https://hackage.haskell.org/package/rapid-0.1.4/docs
 
 Check out [https://github.com/Simre1/hero](https://github.com/Simre1/hero), it's an ECS like APECS and seems like a really cool project! I hope to make this unity tutorial project for it as well.
 
+Check out [https://github.com/matthunz/aztecs](https://github.com/matthunz/aztecs), it's _also_ an ECS! 
+
 ## Thanks
 
 If I forgot something or you think something should be added just open an issue! Free to do whatever with my code, but the assets aren't mine.
